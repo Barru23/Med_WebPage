@@ -1,0 +1,4 @@
+- Afegir fotos a les activitats
+- Si es pot ficar exemples de talla
+- Per arxivar les activitats
+- Mirar els fallos de la web

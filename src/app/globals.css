@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+/* =============================================================================
+   XIVARRI design tokens — the single source of truth (CLAUDE.md §8).
+   Defined once here and consumed everywhere via Tailwind utilities
+   (bg-bone, text-signal, font-display, ...) or the raw CSS custom
+   properties (var(--color-signal)). Do not redeclare these values
+   anywhere else.
+   ========================================================================== */
+@theme {
+  /* ---- Colour — five values, nothing else. Restraint is the identity. ---- */
+  --color-bone: #f2e7d8; /* page ground */
+  --color-signal: #e1281c; /* the red; one thing per screen */
+  --color-ink: #141414; /* type */
+  --color-deep: #b81e14; /* pressed / hover state of signal */
+  --color-sand: #dccdb8; /* hairlines, seams, disabled */
+
+  /* ---- Type — three roles (four faces). Loaded in layout.tsx via
+         next/font, which sets the --font-* variables referenced here. ------ */
+  --font-display: var(--font-bodoni); /* Bodoni Moda — huge, bleeds off edge */
+  --font-marker: var(--font-permanent-marker); /* Permanent Marker — annotation only */
+  --font-body: var(--font-archivo); /* Archivo — UI + body */
+  --font-mono: var(--font-jetbrains-mono); /* JetBrains Mono — ticket codes, admin tables */
+}
+
+/* Page defaults. Body copy on the bone ground in Archivo. */
+html {
+  color-scheme: light;
+}
+
+body {
+  background-color: var(--color-bone);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* =============================================================================
+   Signature devices (CLAUDE.md §8). Kept here so the look lives with the
+   tokens. Seam grid, torn poster tiles, red stamp, dotted-leader fields.
+   ========================================================================== */
+
+/* Torn poster tile — ragged bottom edge, as if ripped off a wall. */
+.torn {
+  clip-path: polygon(
+    0 0, 100% 0, 100% 93%,
+    90% 99%, 80% 94%, 70% 99%, 60% 94%, 50% 99%,
+    40% 94%, 30% 99%, 20% 94%, 10% 99%, 0 94%
+  );
+}
+
+/* Red rubber stamp — one per screen, slightly askew. */
+.stamp {
+  display: inline-block;
+  border: 2px solid var(--color-signal);
+  color: var(--color-signal);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+  font-weight: 700;
+  font-size: 0.75rem;
+  padding: 0.3rem 0.7rem;
+  border-radius: 3px;
+  transform: rotate(-7deg);
+  opacity: 0.85;
+}
+
+/* Dotted leader — label ……… value, the història clínica field rule. */
+.leader {
+  flex: 1;
+  border-bottom: 1px dotted color-mix(in srgb, var(--color-ink) 45%, transparent);
+  transform: translateY(-0.3rem);
+}
+
+/* Seam grid: three vertical panels, hairline seams in --sand.
+   Used behind a Bodoni word so it reads as a single word sliced in three. */
+.seam-rules {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  pointer-events: none;
+}
+.seam-rules > span {
+  border-right: 1px solid var(--color-sand);
+}
+.seam-rules > span:last-child {
+  border-right: 0;
+}
+
+/* =============================================================================
+   Admin UI primitives (CLAUDE.md §7). Plain and functional — every task must
+   be doable from a form with labelled fields, on a phone. Same five tokens
+   and Archivo/JetBrains Mono, no seams/torn-tile devices (those are the
+   public-site language, not the admin's).
+   ========================================================================== */
+.admin-label {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in srgb, var(--color-ink) 60%, transparent);
+  margin-bottom: 0.25rem;
+}
+
+.admin-input,
+.admin-select,
+.admin-textarea {
+  width: 100%;
+  border: 1px solid var(--color-sand);
+  background: var(--color-bone);
+  color: var(--color-ink);
+  padding: 0.6rem 0.7rem;
+  font-family: var(--font-body);
+  font-size: 1rem; /* 16px+ prevents iOS auto-zoom on focus */
+  border-radius: 2px;
+}
+.admin-input:focus,
+.admin-select:focus,
+.admin-textarea:focus {
+  outline: 2px solid var(--color-signal);
+  outline-offset: 1px;
+  border-color: var(--color-signal);
+}
+
+.admin-card {
+  border: 1px solid var(--color-sand);
+  background: var(--color-bone);
+  border-radius: 3px;
+}
+
+.admin-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.4rem;
+  border: 1px solid var(--color-ink);
+  background: var(--color-bone);
+  color: var(--color-ink);
+  padding: 0.55rem 1rem;
+  font-family: var(--font-body);
+  font-weight: 600;
+  font-size: 0.9rem;
+  border-radius: 2px;
+  cursor: pointer;
+}
+.admin-btn:hover {
+  background: var(--color-sand);
+}
+.admin-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.admin-btn-primary {
+  border-color: var(--color-signal);
+  background: var(--color-signal);
+  color: var(--color-bone);
+}
+.admin-btn-primary:hover {
+  background: var(--color-deep);
+  border-color: var(--color-deep);
+}
+
+.admin-btn-danger {
+  border-color: var(--color-signal);
+  color: var(--color-signal);
+  background: var(--color-bone);
+}
+.admin-btn-danger:hover {
+  background: var(--color-signal);
+  color: var(--color-bone);
+}
+
+/* Quality floor (CLAUDE.md §8): respect reduced-motion globally. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

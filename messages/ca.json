@@ -1,0 +1,60 @@
+{
+  "brand": "XIVARRI",
+  "tagline": "14a promoció de Medicina · UdG",
+  "home": {
+    "contactSheet": "Full de contactes",
+    "onSaleNow": "En venda ara",
+    "nothingOnSale": "Res en venda ara mateix",
+    "noOpenActivities": "cap activitat oberta",
+    "look": "fes-hi un cop d'ull"
+  },
+  "department": {
+    "activities": "Activitats",
+    "noOpenActivities": "cap activitat oberta",
+    "soldOut": "Exhaurit",
+    "lastPlaces": "últimes places",
+    "from": "des de",
+    "back": "Tornar"
+  },
+  "activity": {
+    "modalitats": "Modalitats",
+    "yourDetails": "Les teves dades",
+    "detailsNote": "T'ho demanarem al pagament",
+    "buy": "Compra l'entrada",
+    "addTicket": "Afegir una altra entrada",
+    "buyerName": "Nom i cognoms",
+    "buyerPhone": "Telèfon",
+    "comingSoon": "Disponible aviat",
+    "soldOut": "Exhaurit",
+    "lastPlaces": "últimes places",
+    "when": "Quan",
+    "where": "On",
+    "sample": "Mostra"
+  },
+  "type": {
+    "event": "Activitat",
+    "merch": "Marxandatge",
+    "trip": "Sortida"
+  },
+  "ticket": {
+    "pendingTitle": "Pendent de pagament",
+    "pendingBody": "Hem reservat la teva plaça. Rebràs l'entrada quan es confirmi el pagament — torna a aquesta pàgina més tard.",
+    "notFound": "Aquesta entrada no existeix.",
+    "checkedInAt": "Utilitzada",
+    "buyer": "Comprador",
+    "code": "Codi"
+  },
+  "order": {
+    "title": "La teva comanda",
+    "pendingBanner": "Pendent de pagament",
+    "paidBanner": "Pagat",
+    "notFound": "Aquesta comanda no existeix.",
+    "viewTicket": "Veure entrada",
+    "tickets": "Entrades"
+  },
+  "notFound": {
+    "title": "Aquí no hi ha res",
+    "body": "Aquesta pàgina no existeix o s'ha tancat.",
+    "home": "Vés a l'inici"
+  }
+}

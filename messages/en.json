@@ -1,0 +1,60 @@
+{
+  "brand": "XIVARRI",
+  "tagline": "14th Medicine class · UdG",
+  "home": {
+    "contactSheet": "Contact sheet",
+    "onSaleNow": "On sale now",
+    "nothingOnSale": "Nothing on sale right now",
+    "noOpenActivities": "no open activities",
+    "look": "take a look"
+  },
+  "department": {
+    "activities": "Activities",
+    "noOpenActivities": "no open activities",
+    "soldOut": "Sold out",
+    "lastPlaces": "last places",
+    "from": "from",
+    "back": "Back"
+  },
+  "activity": {
+    "modalitats": "Options",
+    "yourDetails": "Your details",
+    "detailsNote": "We'll ask for these at checkout",
+    "buy": "Buy ticket",
+    "addTicket": "Add another ticket",
+    "buyerName": "Full name",
+    "buyerPhone": "Phone",
+    "comingSoon": "Available soon",
+    "soldOut": "Sold out",
+    "lastPlaces": "last places",
+    "when": "When",
+    "where": "Where",
+    "sample": "Sample"
+  },
+  "type": {
+    "event": "Activity",
+    "merch": "Merch",
+    "trip": "Trip"
+  },
+  "ticket": {
+    "pendingTitle": "Payment pending",
+    "pendingBody": "We've reserved your place. You'll get your ticket once payment is confirmed — check back on this page later.",
+    "notFound": "This ticket doesn't exist.",
+    "checkedInAt": "Used",
+    "buyer": "Buyer",
+    "code": "Code"
+  },
+  "order": {
+    "title": "Your order",
+    "pendingBanner": "Payment pending",
+    "paidBanner": "Paid",
+    "notFound": "This order doesn't exist.",
+    "viewTicket": "View ticket",
+    "tickets": "Tickets"
+  },
+  "notFound": {
+    "title": "Nothing here",
+    "body": "This page doesn't exist or has closed.",
+    "home": "Go home"
+  }
+}

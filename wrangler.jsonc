@@ -1,0 +1,55 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "xivarri",
+  "main": ".open-next/worker.js",
+  "compatibility_date": "2025-08-01",
+  // nodejs_compat: required by OpenNext for the Node.js runtime surface.
+  // global_fetch_strictly_public: OpenNext recommends this so server-side
+  // fetches to the site's own routes go back through the public internet
+  // path rather than short-circuiting.
+  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+
+  // Static assets produced by the OpenNext build.
+  "assets": {
+    "binding": "ASSETS",
+    "directory": ".open-next/assets"
+  },
+
+  // ---- Bindings -----------------------------------------------------------
+  // D1: primary database (Department, Activity, Variant, Field, Order, ...).
+  // Run `wrangler d1 create xivarri` and paste the returned id below. The
+  // placeholder is fine for local `next dev` (Wrangler uses a local SQLite).
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "xivarri",
+      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // R2: posters and merch photos.
+  // Run `wrangler r2 bucket create xivarri-media` before first deploy.
+  "r2_buckets": [
+    {
+      "binding": "MEDIA",
+      "bucket_name": "xivarri-media"
+    }
+  ]
+
+  // ---- Secrets (never committed here) --------------------------------------
+  // Local dev: copy .dev.vars.example -> .dev.vars and fill in TEST keys.
+  // Deploy: `wrangler secret put STRIPE_SECRET_KEY` and
+  // `wrangler secret put STRIPE_WEBHOOK_SECRET`. Use TEST-mode keys until
+  // CLAUDE.md §11 step 6 says otherwise ("Live keys only after §9 is
+  // resolved" — §9's payment-recipient question is resolved as of the
+  // personal-account decision, but live keys are still a separate,
+  // deliberate step). Resend keys etc. join this list in a later step.
+
+  // ---- Admin auth (CLAUDE.md §3 / §7) --------------------------------------
+  // Cloudflare Access on /admin* is a Zero Trust dashboard config (Access ->
+  // Applications -> add "xivarri.<domain>/admin*", policy: email allowlist),
+  // not something wrangler.jsonc can express. Do this once a custom domain is
+  // attached. The app never implements its own login — src/lib/access.ts only
+  // reads the identity header Access injects once that's set up.
+}

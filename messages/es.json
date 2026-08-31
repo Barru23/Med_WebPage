@@ -1,0 +1,60 @@
+{
+  "brand": "XIVARRI",
+  "tagline": "14ª promoción de Medicina · UdG",
+  "home": {
+    "contactSheet": "Hoja de contactos",
+    "onSaleNow": "A la venta ahora",
+    "nothingOnSale": "Nada a la venta ahora mismo",
+    "noOpenActivities": "sin actividades abiertas",
+    "look": "échale un vistazo"
+  },
+  "department": {
+    "activities": "Actividades",
+    "noOpenActivities": "sin actividades abiertas",
+    "soldOut": "Agotado",
+    "lastPlaces": "últimas plazas",
+    "from": "desde",
+    "back": "Volver"
+  },
+  "activity": {
+    "modalitats": "Modalidades",
+    "yourDetails": "Tus datos",
+    "detailsNote": "Te los pediremos en el pago",
+    "buy": "Compra la entrada",
+    "addTicket": "Añadir otra entrada",
+    "buyerName": "Nombre y apellidos",
+    "buyerPhone": "Teléfono",
+    "comingSoon": "Disponible pronto",
+    "soldOut": "Agotado",
+    "lastPlaces": "últimas plazas",
+    "when": "Cuándo",
+    "where": "Dónde",
+    "sample": "Muestra"
+  },
+  "type": {
+    "event": "Actividad",
+    "merch": "Merchandising",
+    "trip": "Salida"
+  },
+  "ticket": {
+    "pendingTitle": "Pendiente de pago",
+    "pendingBody": "Hemos reservado tu plaza. Recibirás la entrada cuando se confirme el pago — vuelve a esta página más tarde.",
+    "notFound": "Esta entrada no existe.",
+    "checkedInAt": "Utilizada",
+    "buyer": "Comprador",
+    "code": "Código"
+  },
+  "order": {
+    "title": "Tu pedido",
+    "pendingBanner": "Pendiente de pago",
+    "paidBanner": "Pagado",
+    "notFound": "Este pedido no existe.",
+    "viewTicket": "Ver entrada",
+    "tickets": "Entradas"
+  },
+  "notFound": {
+    "title": "Aquí no hay nada",
+    "body": "Esta página no existe o se ha cerrado.",
+    "home": "Ir al inicio"
+  }
+}

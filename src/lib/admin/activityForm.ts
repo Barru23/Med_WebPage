@@ -1,0 +1,67 @@
+// Shared shape for the variant/field editors in ActivityForm (client) and
+// the createActivity/updateActivity server actions. Serialized to JSON in
+// hidden form fields rather than name="variants[0].x" indexing.
+
+export interface VariantDraft {
+  id?: string; // present = existing row (UPDATE), absent = new row (INSERT)
+  name_ca: string;
+  name_es: string;
+  name_en: string;
+  price_euros: string; // "12,50" / "12.50" as typed; parsed server-side
+  stock: string;
+  sold: number; // read-only, for the client to guard row removal
+  sale_start: string; // datetime-local value, "" if unset
+  sale_end: string;
+}
+
+export interface FieldDraft {
+  id?: string;
+  label_ca: string;
+  label_es: string;
+  label_en: string;
+  type: "text" | "number" | "select" | "checkbox";
+  options: string; // newline-separated plain labels, only used for select/checkbox
+  required: boolean;
+}
+
+export function emptyVariant(): VariantDraft {
+  return {
+    name_ca: "",
+    name_es: "",
+    name_en: "",
+    price_euros: "",
+    stock: "",
+    sold: 0,
+    sale_start: "",
+    sale_end: "",
+  };
+}
+
+export function emptyField(): FieldDraft {
+  return {
+    label_ca: "",
+    label_es: "",
+    label_en: "",
+    type: "text",
+    options: "",
+    required: false,
+  };
+}
+
+/** "12,50" or "12.50" -> 1250 cents. Empty/invalid -> 0. */
+export function eurosToCents(input: string): number {
+  const normalized = input.replace(",", ".").trim();
+  const value = Number.parseFloat(normalized);
+  if (!Number.isFinite(value) || value < 0) return 0;
+  return Math.round(value * 100);
+}
+
+export function centsToEuros(cents: number): string {
+  return (cents / 100).toFixed(2);
+}
+
+/** SQLite "YYYY-MM-DD HH:MM:SS" -> <input type="datetime-local"> value. */
+export function toInputDatetime(v: string | null): string {
+  if (!v) return "";
+  return v.replace(" ", "T").slice(0, 16);
+}

@@ -1,0 +1,43 @@
+{
+  "name": "xivarri",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
+    "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "db:migrate:local": "wrangler d1 migrations apply xivarri --local",
+    "db:migrate": "wrangler d1 migrations apply xivarri --remote",
+    "db:seed:local": "wrangler d1 execute xivarri --local --file=./seed.sql",
+    "db:seed": "wrangler d1 execute xivarri --remote --file=./seed.sql"
+  },
+  "dependencies": {
+    "exceljs": "4.4.0",
+    "jsqr": "1.4.0",
+    "next": "16.3.3",
+    "qrcode": "1.5.4",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "stripe": "22.5.0"
+  },
+  "devDependencies": {
+    "@opennextjs/cloudflare": "1.20.2",
+    "@tailwindcss/postcss": "4.3.3",
+    "@types/node": "^22",
+    "@types/qrcode": "1.5.6",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "tailwindcss": "4.3.3",
+    "typescript": "^5",
+    "wrangler": "4.125.0"
+  },
+  "allowScripts": {
+    "esbuild@0.25.4": true,
+    "esbuild@0.28.1": true,
+    "workerd@1.20260820.1": true
+  }
+}
