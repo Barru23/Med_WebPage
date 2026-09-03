@@ -8,9 +8,13 @@ import {
   toInputDatetime,
   type VariantDraft,
   type FieldDraft,
+  type ActivityImageDraft,
+  type SizeGuideRowDraft,
 } from "@/lib/admin/activityForm";
 import VariantEditor from "./VariantEditor";
 import FieldEditor from "./FieldEditor";
+import MediaEditor from "./MediaEditor";
+import SizeGuideEditor from "./SizeGuideEditor";
 import SubmitButton from "@/components/admin/SubmitButton";
 import type { AdminDepartment, AdminActivityDetail } from "@/lib/admin/queries";
 
@@ -25,11 +29,15 @@ export default function ActivityForm({
   activity,
   initialVariants,
   initialFields,
+  initialImages,
+  initialSizeGuide,
 }: {
   departments: AdminDepartment[];
   activity?: AdminActivityDetail;
   initialVariants?: VariantDraft[];
   initialFields?: FieldDraft[];
+  initialImages?: ActivityImageDraft[];
+  initialSizeGuide?: SizeGuideRowDraft[];
 }) {
   const isEdit = Boolean(activity);
   const action = isEdit ? updateActivity : createActivity;
@@ -39,12 +47,17 @@ export default function ActivityForm({
     initialVariants && initialVariants.length > 0 ? initialVariants : [emptyVariant()],
   );
   const [fields, setFields] = useState<FieldDraft[]>(initialFields ?? []);
+  const [images, setImages] = useState<ActivityImageDraft[]>(initialImages ?? []);
+  const [sizeGuide, setSizeGuide] = useState<SizeGuideRowDraft[]>(initialSizeGuide ?? []);
+  const [activityType, setActivityType] = useState(activity?.type ?? "event");
 
   return (
     <form action={formAction} className="flex flex-col gap-6">
       {activity && <input type="hidden" name="id" value={activity.id} />}
       <input type="hidden" name="variants_json" value={JSON.stringify(variants)} readOnly />
       <input type="hidden" name="fields_json" value={JSON.stringify(fields)} readOnly />
+      <input type="hidden" name="gallery_json" value={JSON.stringify(images)} readOnly />
+      <input type="hidden" name="size_guide_json" value={JSON.stringify(sizeGuide)} readOnly />
 
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block">
@@ -69,6 +82,7 @@ export default function ActivityForm({
             className="admin-select"
             name="type"
             defaultValue={activity?.type ?? "event"}
+            onChange={(event) => setActivityType(event.target.value)}
             disabled={isEdit}
             required
           >
@@ -177,6 +191,32 @@ export default function ActivityForm({
 
       <section>
         <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+          Galeria de fotos
+        </h2>
+        <p className="mt-1 text-sm text-ink/60">Pots seleccionar diverses imatges alhora.</p>
+        <div className="mt-2">
+          <MediaEditor images={images} onChange={setImages} />
+        </div>
+      </section>
+
+      {activityType === "merch" && (
+        <section>
+          <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+            Guia de talles
+          </h2>
+          <p className="mt-1 text-sm text-ink/60">Mesura la peça plana, d&apos;aixella a aixella i de dalt a baix.</p>
+          <div className="mt-2">
+            <SizeGuideEditor
+              rows={sizeGuide}
+              onChange={setSizeGuide}
+              imageUrl={activity?.size_guide_image_url}
+            />
+          </div>
+        </section>
+      )}
+
+      <section>
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
           Preguntes addicionals (opcional)
         </h2>
         <div className="mt-2">
@@ -189,10 +229,14 @@ export default function ActivityForm({
           type="checkbox"
           name="published"
           defaultChecked={activity ? activity.published === 1 : false}
+          disabled={activity?.archived === 1}
           className="h-5 w-5"
         />
         <span className="font-body font-semibold">Publicada</span>
       </label>
+      {activity?.archived === 1 && (
+        <p className="font-mono text-xs text-signal">Restaura l&apos;activitat abans de publicar-la.</p>
+      )}
 
       {state?.error && <p className="font-mono text-sm text-signal">{state.error}</p>}
 

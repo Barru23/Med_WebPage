@@ -3,6 +3,7 @@ import { getT, pick, isLocale, type Locale } from "@/lib/i18n";
 import { listDepartments, listOnSale } from "@/lib/queries";
 import { GreasePencilRing, MarkerNote } from "@/components/marks";
 import { notFound } from "next/navigation";
+import BrandLockup from "@/components/BrandLockup";
 
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,9 @@ export default async function HomePage({
         <p className="font-mono text-[0.7rem] uppercase tracking-[0.25em] text-ink/50">
           {t("home.contactSheet")}
         </p>
-        <h1 className="mt-1 font-display text-[clamp(3.5rem,22vw,11rem)] leading-[0.82] tracking-tight text-ink">
-          XIVARRI
+        <h1 className="mt-3">
+          <BrandLockup />
         </h1>
-        <p className="mt-1 font-mono text-xs uppercase tracking-widest text-ink/50">
-          {t("tagline")}
-        </p>
       </section>
 
       {/* Contact sheet — grid of department frames. */}

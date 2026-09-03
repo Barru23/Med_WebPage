@@ -29,7 +29,14 @@
     "lastPlaces": "last places",
     "when": "When",
     "where": "Where",
-    "sample": "Sample"
+    "sample": "Sample",
+    "gallery": "Gallery",
+    "sizeGuide": "Size guide",
+    "size": "Size",
+    "width": "Width",
+    "length": "Length",
+    "close": "Close",
+    "sizeGuideNote": "Flat garment measurements in centimetres. Compare them with an item that already fits you well."
   },
   "type": {
     "event": "Activity",

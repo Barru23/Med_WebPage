@@ -5,6 +5,8 @@ import { getActivityBySlug, LAST_PLACES_THRESHOLD } from "@/lib/queries";
 import { formatDate } from "@/lib/format";
 import { Stamp, MarkerNote } from "@/components/marks";
 import CheckoutForm from "./CheckoutForm";
+import SizeGuideModal from "./SizeGuideModal";
+import Image from "next/image";
 
 export const dynamic = "force-dynamic";
 
@@ -20,7 +22,7 @@ export default async function ActivityPage({
 
   const data = await getActivityBySlug(slug);
   if (!data) notFound();
-  const { activity, variants, fields } = data;
+  const { activity, variants, fields, images, sizeGuide } = data;
 
   const title = pick(activity, "title", l);
   const description = pick(activity, "description", l);
@@ -56,6 +58,18 @@ export default async function ActivityPage({
         </h1>
       </header>
 
+      {activity.poster_url && (
+        <Image
+          src={activity.poster_url}
+          alt={title}
+          width={900}
+          height={1100}
+          priority
+          unoptimized
+          className="mt-5 h-auto max-h-[70vh] w-full border border-sand object-contain"
+        />
+      )}
+
       {/* Meta — dotted-leader rows. */}
       {(when || activity.location) && (
         <dl className="mt-5 space-y-2">
@@ -73,6 +87,27 @@ export default async function ActivityPage({
         </p>
       )}
 
+      {images.length > 0 && (
+        <section className="mt-8" aria-labelledby="gallery-title">
+          <h2 id="gallery-title" className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/50">
+            {t("activity.gallery")}
+          </h2>
+          <div className="-mx-5 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0">
+            {images.map((galleryImage, index) => (
+              <Image
+                key={galleryImage.id}
+                src={galleryImage.image_url}
+                alt={galleryImage.alt_ca || `${title} ${index + 1}`}
+                width={700}
+                height={700}
+                unoptimized
+                className="aspect-square w-[82vw] max-w-sm shrink-0 snap-center border border-sand object-cover sm:w-full"
+              />
+            ))}
+          </div>
+        </section>
+      )}
+
       {/* Checkout — modalitats, custom fields and buyer details in one form. */}
       <section className="mt-8">
         <div className="flex items-baseline justify-between gap-2">
@@ -83,6 +118,20 @@ export default async function ActivityPage({
             <MarkerNote className="text-base" rotate={-6}>
               {t("activity.lastPlaces")}
             </MarkerNote>
+          )}
+          {activity.type === "merch" && (sizeGuide.length > 0 || activity.size_guide_image_url) && (
+            <SizeGuideModal
+              rows={sizeGuide}
+              imageUrl={activity.size_guide_image_url}
+              strings={{
+                title: t("activity.sizeGuide"),
+                size: t("activity.size"),
+                width: t("activity.width"),
+                length: t("activity.length"),
+                close: t("activity.close"),
+                note: t("activity.sizeGuideNote"),
+              }}
+            />
           )}
         </div>
         <div className="mt-3">
@@ -118,4 +167,3 @@ function LeaderRow({ label, value }: { label: string; value: string }) {
     </div>
   );
 }
-

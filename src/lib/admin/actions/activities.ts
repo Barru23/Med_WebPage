@@ -8,6 +8,10 @@ import { slugify } from "@/lib/slug";
 import { saveMedia } from "@/lib/storage";
 import { eurosToCents } from "@/lib/admin/activityForm";
 import type { VariantDraft, FieldDraft } from "@/lib/admin/activityForm";
+import type {
+  ActivityImageDraft,
+  SizeGuideRowDraft,
+} from "@/lib/admin/activityForm";
 
 export type ActionState = { error?: string } | null;
 
@@ -32,6 +36,70 @@ function parseFields(json: string): FieldDraft[] {
   } catch {
     return [];
   }
+}
+
+function parseImages(json: string): ActivityImageDraft[] {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function parseSizeGuide(json: string): SizeGuideRowDraft[] {
+  try {
+    const parsed = JSON.parse(json);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function normalizedSizeGuide(rows: SizeGuideRowDraft[]): {
+  value: string | null;
+  error?: string;
+} {
+  const complete = rows.filter(
+    (row) => row.size.trim() || row.width_cm.trim() || row.length_cm.trim(),
+  );
+  const normalized = complete.map((row) => ({
+    size: row.size.trim(),
+    width_cm: Number(row.width_cm.replace(",", ".")),
+    length_cm: Number(row.length_cm.replace(",", ".")),
+  }));
+  if (
+    normalized.some(
+      (row) =>
+        !row.size ||
+        !Number.isFinite(row.width_cm) ||
+        row.width_cm <= 0 ||
+        !Number.isFinite(row.length_cm) ||
+        row.length_cm <= 0,
+    )
+  ) {
+    return { value: null, error: "Completa cada talla amb amplada i llargada positives." };
+  }
+  return { value: normalized.length ? JSON.stringify(normalized) : null };
+}
+
+function imageFiles(formData: FormData, name: string): File[] {
+  return formData
+    .getAll(name)
+    .filter((value): value is File => value instanceof File && value.size > 0);
+}
+
+function validateImages(files: File[]): string | null {
+  if (files.some((file) => !file.type.startsWith("image/"))) {
+    return "Només es poden pujar fitxers d'imatge.";
+  }
+  if (files.some((file) => file.size > 10 * 1024 * 1024)) {
+    return "Cada imatge ha de pesar menys de 10 MB.";
+  }
+  if (files.reduce((total, file) => total + file.size, 0) > 24 * 1024 * 1024) {
+    return "El conjunt d'imatges ha de pesar menys de 24 MB.";
+  }
+  return null;
 }
 
 function toDatetime(v: string): string | null {
@@ -187,6 +255,19 @@ export async function createActivity(
     return { error: "Departament, tipus i títol (CA) són obligatoris." };
   }
 
+  const sizeGuide = normalizedSizeGuide(
+    parseSizeGuide(String(formData.get("size_guide_json") ?? "[]")),
+  );
+  if (sizeGuide.error) return { error: sizeGuide.error };
+  const galleryFiles = imageFiles(formData, "gallery");
+  const guideFiles = imageFiles(formData, "size_guide_image");
+  const mediaError = validateImages([
+    ...galleryFiles,
+    ...guideFiles,
+    ...imageFiles(formData, "poster"),
+  ]);
+  if (mediaError) return { error: mediaError };
+
   const db = await getDb();
   const baseSlug = slugify(titleCa);
   let slug = baseSlug;
@@ -197,6 +278,9 @@ export async function createActivity(
   const poster = formData.get("poster");
   const posterUrl =
     poster instanceof File && poster.size > 0 ? await saveMedia("activities", poster) : null;
+  const sizeGuideImageUrl = type === "merch" && guideFiles[0]
+    ? await saveMedia("size-guides", guideFiles[0])
+    : null;
 
   const id = newId("act");
   await db
@@ -204,8 +288,9 @@ export async function createActivity(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
          description_ca, description_es, description_en,
-         poster_url, starts_at, location, edition, published)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         poster_url, starts_at, location, edition, published,
+         size_guide_json, size_guide_image_url, archived)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     )
     .bind(
       id,
@@ -223,8 +308,31 @@ export async function createActivity(
       str(formData.get("location")),
       str(formData.get("edition")),
       formData.get("published") ? 1 : 0,
+      type === "merch" ? sizeGuide.value : null,
+      type === "merch" ? sizeGuideImageUrl : null,
     )
     .run();
+
+  if (galleryFiles.length) {
+    await db.batch(
+      await Promise.all(
+        galleryFiles.map(async (file, position) =>
+          db
+            .prepare(
+              `INSERT INTO activity_image (id, activity_id, image_url, alt_ca, position)
+               VALUES (?, ?, ?, ?, ?)`,
+            )
+            .bind(
+              newId("img"),
+              id,
+              await saveMedia("activity-galleries", file),
+              titleCa,
+              position,
+            ),
+        ),
+      ),
+    );
+  }
 
   const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
   const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
@@ -246,58 +354,97 @@ export async function updateActivity(
     return { error: "Departament i títol (CA) són obligatoris." };
   }
 
-  const db = await getDb();
-  const poster = formData.get("poster");
+  const type = str(formData.get("type"));
+  const sizeGuide = normalizedSizeGuide(
+    parseSizeGuide(String(formData.get("size_guide_json") ?? "[]")),
+  );
+  if (sizeGuide.error) return { error: sizeGuide.error };
+  const galleryFiles = imageFiles(formData, "gallery");
+  const guideFiles = imageFiles(formData, "size_guide_image");
+  const posterFiles = imageFiles(formData, "poster");
+  const mediaError = validateImages([...galleryFiles, ...guideFiles, ...posterFiles]);
+  if (mediaError) return { error: mediaError };
 
-  if (poster instanceof File && poster.size > 0) {
-    const posterUrl = await saveMedia("activities", poster);
-    await db
-      .prepare(
-        `UPDATE activity SET department_id=?, title_ca=?, title_es=?, title_en=?,
-                description_ca=?, description_es=?, description_en=?,
-                poster_url=?, starts_at=?, location=?, edition=?, published=?
-         WHERE id=?`,
-      )
-      .bind(
-        departmentId,
-        titleCa,
-        str(formData.get("title_es")),
-        str(formData.get("title_en")),
-        str(formData.get("description_ca")),
-        str(formData.get("description_es")),
-        str(formData.get("description_en")),
-        posterUrl,
-        toDatetime(str(formData.get("starts_at")) ?? ""),
-        str(formData.get("location")),
-        str(formData.get("edition")),
-        formData.get("published") ? 1 : 0,
-        id,
-      )
-      .run();
-  } else {
-    await db
-      .prepare(
-        `UPDATE activity SET department_id=?, title_ca=?, title_es=?, title_en=?,
-                description_ca=?, description_es=?, description_en=?,
-                starts_at=?, location=?, edition=?, published=?
-         WHERE id=?`,
-      )
-      .bind(
-        departmentId,
-        titleCa,
-        str(formData.get("title_es")),
-        str(formData.get("title_en")),
-        str(formData.get("description_ca")),
-        str(formData.get("description_es")),
-        str(formData.get("description_en")),
-        toDatetime(str(formData.get("starts_at")) ?? ""),
-        str(formData.get("location")),
-        str(formData.get("edition")),
-        formData.get("published") ? 1 : 0,
-        id,
-      )
-      .run();
+  const db = await getDb();
+  const current = await db
+    .prepare(
+      `SELECT poster_url, size_guide_image_url, archived FROM activity WHERE id = ?`,
+    )
+    .bind(id)
+    .first<{
+      poster_url: string | null;
+      size_guide_image_url: string | null;
+      archived: number;
+    }>();
+  if (!current) return { error: "L'activitat no existeix." };
+
+  const posterUrl = posterFiles[0]
+    ? await saveMedia("activities", posterFiles[0])
+    : current.poster_url;
+  let sizeGuideImageUrl = current.size_guide_image_url;
+  if (formData.get("remove_size_guide_image")) sizeGuideImageUrl = null;
+  if (type === "merch" && guideFiles[0]) {
+    sizeGuideImageUrl = await saveMedia("size-guides", guideFiles[0]);
   }
+
+  await db
+    .prepare(
+      `UPDATE activity SET department_id=?, title_ca=?, title_es=?, title_en=?,
+              description_ca=?, description_es=?, description_en=?, poster_url=?,
+              starts_at=?, location=?, edition=?, published=?, size_guide_json=?,
+              size_guide_image_url=? WHERE id=?`,
+    )
+    .bind(
+      departmentId,
+      titleCa,
+      str(formData.get("title_es")),
+      str(formData.get("title_en")),
+      str(formData.get("description_ca")),
+      str(formData.get("description_es")),
+      str(formData.get("description_en")),
+      posterUrl,
+      toDatetime(str(formData.get("starts_at")) ?? ""),
+      str(formData.get("location")),
+      str(formData.get("edition")),
+      current.archived ? 0 : formData.get("published") ? 1 : 0,
+      type === "merch" ? sizeGuide.value : null,
+      type === "merch" ? sizeGuideImageUrl : null,
+      id,
+    )
+    .run();
+
+  const retainedImages = parseImages(String(formData.get("gallery_json") ?? "[]"));
+  const { results: storedImages } = await db
+    .prepare(`SELECT id, image_url FROM activity_image WHERE activity_id = ?`)
+    .bind(id)
+    .all<{ id: string; image_url: string }>();
+  const storedById = new Map(storedImages.map((image) => [image.id, image]));
+  const validRetained = retainedImages.filter((image) => storedById.has(image.id));
+  const retainedIds = new Set(validRetained.map((image) => image.id));
+  const imageStatements = storedImages
+    .filter((image) => !retainedIds.has(image.id))
+    .map((image) => db.prepare(`DELETE FROM activity_image WHERE id = ?`).bind(image.id));
+  validRetained.forEach((image, position) => {
+    imageStatements.push(
+      db
+        .prepare(`UPDATE activity_image SET alt_ca = ?, position = ? WHERE id = ?`)
+        .bind(str(image.alt_ca), position, image.id),
+    );
+  });
+  const uploadedGallery = await Promise.all(
+    galleryFiles.map((file) => saveMedia("activity-galleries", file)),
+  );
+  uploadedGallery.forEach((imageUrl, index) => {
+    imageStatements.push(
+      db
+        .prepare(
+          `INSERT INTO activity_image (id, activity_id, image_url, alt_ca, position)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(newId("img"), id, imageUrl, titleCa, validRetained.length + index),
+    );
+  });
+  if (imageStatements.length) await db.batch(imageStatements);
 
   const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
   const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
@@ -325,6 +472,8 @@ export async function duplicateActivity(id: string): Promise<void> {
     description_en: string | null;
     poster_url: string | null;
     location: string | null;
+    size_guide_json: string | null;
+    size_guide_image_url: string | null;
   }>();
   if (!activity) return;
 
@@ -339,8 +488,9 @@ export async function duplicateActivity(id: string): Promise<void> {
     .prepare(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
-         description_ca, description_es, description_en, poster_url, location, published)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+         description_ca, description_es, description_en, poster_url, location,
+         published, archived, size_guide_json, size_guide_image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
     )
     .bind(
       newActivityId,
@@ -355,6 +505,8 @@ export async function duplicateActivity(id: string): Promise<void> {
       activity.description_en,
       activity.poster_url,
       activity.location,
+      activity.size_guide_json,
+      activity.size_guide_image_url,
     )
     .run();
 
@@ -376,6 +528,13 @@ export async function duplicateActivity(id: string): Promise<void> {
       required: number;
       position: number;
     }>();
+  const { results: images } = await db
+    .prepare(
+      `SELECT image_url, alt_ca, position FROM activity_image
+       WHERE activity_id = ? ORDER BY position`,
+    )
+    .bind(id)
+    .all<{ image_url: string; alt_ca: string | null; position: number }>();
 
   const statements = [
     ...variants.map((v) =>
@@ -404,11 +563,46 @@ export async function duplicateActivity(id: string): Promise<void> {
           f.required,
         ),
     ),
+    ...images.map((image) =>
+      db
+        .prepare(
+          `INSERT INTO activity_image (id, activity_id, image_url, alt_ca, position)
+           VALUES (?, ?, ?, ?, ?)`,
+        )
+        .bind(
+          newId("img"),
+          newActivityId,
+          image.image_url,
+          image.alt_ca,
+          image.position,
+        ),
+    ),
   ];
   if (statements.length > 0) await db.batch(statements);
 
   revalidatePath("/admin/activities");
   redirect(`/admin/activities/${newActivityId}`);
+}
+
+export async function setActivityArchived(
+  id: string,
+  archived: boolean,
+): Promise<void> {
+  const db = await getDb();
+  await db
+    .prepare(
+      `UPDATE activity
+          SET archived = ?, published = CASE WHEN ? = 1 THEN 0 ELSE published END
+        WHERE id = ?`,
+    )
+    .bind(archived ? 1 : 0, archived ? 1 : 0, id)
+    .run();
+
+  revalidatePath("/admin/activities");
+  revalidatePath(`/admin/activities/${id}`);
+  revalidatePath("/[locale]", "page");
+  revalidatePath("/[locale]/d/[slug]", "page");
+  revalidatePath("/[locale]/a/[slug]", "page");
 }
 
 export async function deleteActivity(
@@ -432,6 +626,7 @@ export async function deleteActivity(
   await db.batch([
     db.prepare(`DELETE FROM field WHERE activity_id = ?`).bind(id),
     db.prepare(`DELETE FROM variant WHERE activity_id = ?`).bind(id),
+    db.prepare(`DELETE FROM activity_image WHERE activity_id = ?`).bind(id),
     db.prepare(`DELETE FROM activity WHERE id = ?`).bind(id),
   ]);
 

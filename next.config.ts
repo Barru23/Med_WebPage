@@ -6,6 +6,11 @@ const nextConfig: NextConfig = {
   // Don't let Next auto-generate/overwrite CLAUDE.md — ours is the hand-written
   // project spec and the source of truth.
   agentRules: false,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "25mb",
+    },
+  },
 };
 
 export default nextConfig;

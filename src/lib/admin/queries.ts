@@ -34,6 +34,7 @@ export interface AdminActivityRow {
   starts_at: string | null;
   edition: string | null;
   published: number;
+  archived: number;
   order_count: number;
 }
 
@@ -42,10 +43,10 @@ export async function listAllActivities(): Promise<AdminActivityRow[]> {
   const { results } = await db
     .prepare(
       `SELECT a.id, a.slug, a.type, a.title_ca, d.name_ca AS dept_name_ca,
-              a.starts_at, a.edition, a.published,
+              a.starts_at, a.edition, a.published, a.archived,
               (SELECT COUNT(*) FROM "order" o WHERE o.activity_id = a.id) AS order_count
          FROM activity a JOIN department d ON d.id = a.department_id
-        ORDER BY a.published DESC, (a.starts_at IS NULL), a.starts_at DESC, a.title_ca`,
+        ORDER BY a.archived, a.published DESC, (a.starts_at IS NULL), a.starts_at DESC, a.title_ca`,
     )
     .all<AdminActivityRow>();
   return results;
@@ -91,13 +92,24 @@ export interface AdminActivityDetail {
   location: string | null;
   edition: string | null;
   published: number;
+  archived: number;
+  size_guide_json: string | null;
+  size_guide_image_url: string | null;
   order_count: number;
+}
+
+export interface AdminActivityImage {
+  id: string;
+  image_url: string;
+  alt_ca: string | null;
+  position: number;
 }
 
 export async function getAdminActivity(id: string): Promise<{
   activity: AdminActivityDetail;
   variants: AdminVariant[];
   fields: AdminField[];
+  images: AdminActivityImage[];
 } | null> {
   const db = await getDb();
   const activity = await db
@@ -109,7 +121,7 @@ export async function getAdminActivity(id: string): Promise<{
     .first<AdminActivityDetail>();
   if (!activity) return null;
 
-  const [{ results: variants }, { results: fields }] = await Promise.all([
+  const [{ results: variants }, { results: fields }, { results: images }] = await Promise.all([
     db
       .prepare(
         `SELECT id, name_ca, name_es, name_en, price_cents, stock, sold,
@@ -125,9 +137,16 @@ export async function getAdminActivity(id: string): Promise<{
       )
       .bind(id)
       .all<AdminField>(),
+    db
+      .prepare(
+        `SELECT id, image_url, alt_ca, position
+           FROM activity_image WHERE activity_id = ? ORDER BY position`,
+      )
+      .bind(id)
+      .all<AdminActivityImage>(),
   ]);
 
-  return { activity, variants, fields };
+  return { activity, variants, fields, images };
 }
 
 // ---------------------------------------------------------------------------

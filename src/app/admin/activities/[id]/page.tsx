@@ -1,9 +1,13 @@
 import { notFound } from "next/navigation";
 import { getAdminActivity, listAllDepartments } from "@/lib/admin/queries";
-import { duplicateActivity } from "@/lib/admin/actions/activities";
+import { duplicateActivity, setActivityArchived } from "@/lib/admin/actions/activities";
 import ActivityForm from "../ActivityForm";
 import DeleteActivityForm from "./DeleteActivityForm";
-import type { VariantDraft, FieldDraft } from "@/lib/admin/activityForm";
+import type {
+  VariantDraft,
+  FieldDraft,
+  SizeGuideRowDraft,
+} from "@/lib/admin/activityForm";
 import { centsToEuros, toInputDatetime } from "@/lib/admin/activityForm";
 
 export const dynamic = "force-dynamic";
@@ -19,7 +23,7 @@ export default async function EditActivityPage({
     listAllDepartments(),
   ]);
   if (!detail) notFound();
-  const { activity, variants, fields } = detail;
+  const { activity, variants, fields, images } = detail;
 
   const initialVariants: VariantDraft[] = variants.map((v) => ({
     id: v.id,
@@ -56,15 +60,36 @@ export default async function EditActivityPage({
     };
   });
 
+  let initialSizeGuide: SizeGuideRowDraft[] = [];
+  try {
+    const parsed = JSON.parse(activity.size_guide_json ?? "[]");
+    if (Array.isArray(parsed)) {
+      initialSizeGuide = parsed.map((row) => ({
+        size: String(row.size ?? ""),
+        width_cm: String(row.width_cm ?? ""),
+        length_cm: String(row.length_cm ?? ""),
+      }));
+    }
+  } catch {
+    initialSizeGuide = [];
+  }
+
   return (
     <div className="mx-auto max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl tracking-tight">{activity.title_ca}</h1>
-        <form action={duplicateActivity.bind(null, activity.id)}>
-          <button type="submit" className="admin-btn text-sm">
-            Duplicar
-          </button>
-        </form>
+        <div className="flex gap-2">
+          <form action={setActivityArchived.bind(null, activity.id, activity.archived !== 1)}>
+            <button type="submit" className={activity.archived === 1 ? "admin-btn text-sm" : "admin-btn admin-btn-danger text-sm"}>
+              {activity.archived === 1 ? "Restaurar" : "Arxivar"}
+            </button>
+          </form>
+          <form action={duplicateActivity.bind(null, activity.id)}>
+            <button type="submit" className="admin-btn text-sm">
+              Duplicar
+            </button>
+          </form>
+        </div>
       </div>
 
       <div className="mt-6">
@@ -73,6 +98,12 @@ export default async function EditActivityPage({
           activity={activity}
           initialVariants={initialVariants}
           initialFields={initialFields}
+          initialImages={images.map((image) => ({
+            id: image.id,
+            image_url: image.image_url,
+            alt_ca: image.alt_ca ?? "",
+          }))}
+          initialSizeGuide={initialSizeGuide}
         />
       </div>
 

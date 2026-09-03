@@ -75,6 +75,19 @@ export interface Field {
   required: number;
 }
 
+export interface ActivityImage {
+  id: string;
+  image_url: string;
+  alt_ca: string | null;
+  position: number;
+}
+
+export interface SizeGuideRow {
+  size: string;
+  width_cm: number;
+  length_cm: number;
+}
+
 export interface ActivityPage {
   activity: {
     id: string;
@@ -90,6 +103,8 @@ export interface ActivityPage {
     starts_at: string | null;
     location: string | null;
     edition: string | null;
+    size_guide_json: string | null;
+    size_guide_image_url: string | null;
     dept_slug: string;
     dept_name_ca: string;
     dept_name_es: string | null;
@@ -97,6 +112,8 @@ export interface ActivityPage {
   };
   variants: Variant[];
   fields: Field[];
+  images: ActivityImage[];
+  sizeGuide: SizeGuideRow[];
 }
 
 /** Home: every department, with a count of its currently-open activities. */
@@ -107,7 +124,7 @@ export async function listDepartments(): Promise<DepartmentTile[]> {
       `SELECT d.id, d.slug, d.name_ca, d.name_es, d.name_en, d.photo_url,
         (SELECT COUNT(DISTINCT a.id)
            FROM activity a JOIN variant v ON v.activity_id = a.id
-          WHERE a.department_id = d.id AND a.published = 1 AND ${AVAILABLE}
+          WHERE a.department_id = d.id AND a.published = 1 AND a.archived = 0 AND ${AVAILABLE}
         ) AS open_count
        FROM department d
        ORDER BY d.position, d.name_ca`,
@@ -123,7 +140,7 @@ export async function listOnSale(): Promise<OnSaleItem[]> {
     .prepare(
       `SELECT DISTINCT a.slug, a.type, a.title_ca, a.title_es, a.title_en
          FROM activity a JOIN variant v ON v.activity_id = a.id
-        WHERE a.published = 1 AND ${AVAILABLE}
+        WHERE a.published = 1 AND a.archived = 0 AND ${AVAILABLE}
         ORDER BY (a.starts_at IS NULL), a.starts_at, a.title_ca`,
     )
     .all<OnSaleItem>();
@@ -151,7 +168,7 @@ export async function getDepartmentBySlug(
               MIN(v.price_cents) AS min_price,
               COALESCE(SUM(${AVAIL_EXPR}), 0) AS avail
          FROM activity a LEFT JOIN variant v ON v.activity_id = a.id
-        WHERE a.department_id = ? AND a.published = 1
+        WHERE a.department_id = ? AND a.published = 1 AND a.archived = 0
         GROUP BY a.id
         ORDER BY (a.starts_at IS NULL), a.starts_at, a.title_ca`,
     )
@@ -254,33 +271,51 @@ export async function getActivityBySlug(
               a.title_ca, a.title_es, a.title_en,
               a.description_ca, a.description_es, a.description_en,
               a.poster_url, a.starts_at, a.location, a.edition,
+              a.size_guide_json, a.size_guide_image_url,
               d.slug AS dept_slug,
               d.name_ca AS dept_name_ca, d.name_es AS dept_name_es, d.name_en AS dept_name_en
          FROM activity a JOIN department d ON d.id = a.department_id
-        WHERE a.slug = ? AND a.published = 1`,
+        WHERE a.slug = ? AND a.published = 1 AND a.archived = 0`,
     )
     .bind(slug)
     .first<ActivityPage["activity"]>();
   if (!activity) return null;
 
-  const { results: variants } = await db
-    .prepare(
-      `SELECT v.id, v.name_ca, v.name_es, v.name_en, v.price_cents,
-              ${AVAIL_EXPR} AS avail
-         FROM variant v WHERE v.activity_id = ?
-        ORDER BY v.position, v.name_ca`,
-    )
-    .bind(activity.id)
-    .all<Variant>();
+  const [{ results: variants }, { results: fields }, { results: images }] =
+    await Promise.all([
+      db
+        .prepare(
+          `SELECT v.id, v.name_ca, v.name_es, v.name_en, v.price_cents,
+                  ${AVAIL_EXPR} AS avail
+             FROM variant v WHERE v.activity_id = ?
+            ORDER BY v.position, v.name_ca`,
+        )
+        .bind(activity.id)
+        .all<Variant>(),
+      db
+        .prepare(
+          `SELECT id, label_ca, label_es, label_en, type, options_json, required
+             FROM field WHERE activity_id = ?
+            ORDER BY position`,
+        )
+        .bind(activity.id)
+        .all<Field>(),
+      db
+        .prepare(
+          `SELECT id, image_url, alt_ca, position
+             FROM activity_image WHERE activity_id = ? ORDER BY position`,
+        )
+        .bind(activity.id)
+        .all<ActivityImage>(),
+    ]);
 
-  const { results: fields } = await db
-    .prepare(
-      `SELECT id, label_ca, label_es, label_en, type, options_json, required
-         FROM field WHERE activity_id = ?
-        ORDER BY position`,
-    )
-    .bind(activity.id)
-    .all<Field>();
+  let sizeGuide: SizeGuideRow[] = [];
+  try {
+    const parsed = JSON.parse(activity.size_guide_json ?? "[]");
+    if (Array.isArray(parsed)) sizeGuide = parsed;
+  } catch {
+    sizeGuide = [];
+  }
 
-  return { activity, variants, fields };
+  return { activity, variants, fields, images, sizeGuide };
 }

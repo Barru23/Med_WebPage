@@ -24,6 +24,22 @@ export interface FieldDraft {
   required: boolean;
 }
 
+export interface ActivityImageDraft {
+  id: string;
+  image_url: string;
+  alt_ca: string;
+}
+
+export interface SizeGuideRowDraft {
+  size: string;
+  width_cm: string;
+  length_cm: string;
+}
+
+export function emptySizeGuideRow(): SizeGuideRowDraft {
+  return { size: "", width_cm: "", length_cm: "" };
+}
+
 export function emptyVariant(): VariantDraft {
   return {
     name_ca: "",

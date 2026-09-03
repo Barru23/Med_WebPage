@@ -29,7 +29,14 @@
     "lastPlaces": "últimas plazas",
     "when": "Cuándo",
     "where": "Dónde",
-    "sample": "Muestra"
+    "sample": "Muestra",
+    "gallery": "Galería",
+    "sizeGuide": "Guía de tallas",
+    "size": "Talla",
+    "width": "Ancho",
+    "length": "Largo",
+    "close": "Cerrar",
+    "sizeGuideNote": "Medidas de la prenda en plano, en centímetros. Compáralas con una prenda que ya te quede bien."
   },
   "type": {
     "event": "Actividad",

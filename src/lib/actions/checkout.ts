@@ -20,7 +20,7 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   const buyerName = str(formData.get("buyer_name")); const buyerEmail = str(formData.get("buyer_email")); const buyerPhone = str(formData.get("buyer_phone"));
   const lines = parseLines(String(formData.get("lines_json") ?? "[]")).filter((l) => Number.isInteger(l.quantity) && l.quantity > 0);
   if (!buyerName || !buyerEmail) return { error: "El nom i l'email són obligatoris." }; if (!EMAIL_RE.test(buyerEmail)) return { error: "L'email no és vàlid." }; if (!lines.length) return { error: "Selecciona almenys una modalitat." };
-  const db = await getDb(); const activity = await db.prepare(`SELECT id, edition FROM activity WHERE slug = ? AND published = 1`).bind(activitySlug).first<{ id: string; edition: string | null }>(); if (!activity) return { error: "Activitat no trobada." };
+  const db = await getDb(); const activity = await db.prepare(`SELECT id, edition FROM activity WHERE slug = ? AND published = 1 AND archived = 0`).bind(activitySlug).first<{ id: string; edition: string | null }>(); if (!activity) return { error: "Aquesta activitat no està disponible." };
   const { results: fields } = await db.prepare(`SELECT id FROM field WHERE activity_id = ?`).bind(activity.id).all<{ id: string }>(); const fieldIds = new Set(fields.map((f) => f.id));
   const { results: requiredFields } = await db.prepare(`SELECT id, label_ca FROM field WHERE activity_id = ? AND required = 1`).bind(activity.id).all<{ id: string; label_ca: string }>();
   const resolved: Array<{ variantId: string; variantName: string; quantity: number; answers: Record<string, string>; priceCents: number }> = []; let total = 0;

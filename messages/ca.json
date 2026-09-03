@@ -29,7 +29,14 @@
     "lastPlaces": "últimes places",
     "when": "Quan",
     "where": "On",
-    "sample": "Mostra"
+    "sample": "Mostra",
+    "gallery": "Galeria",
+    "sizeGuide": "Guia de talles",
+    "size": "Talla",
+    "width": "Amplada",
+    "length": "Llargada",
+    "close": "Tancar",
+    "sizeGuideNote": "Mesures de la peça plana, en centímetres. Compara-les amb una peça que ja et quedi bé."
   },
   "type": {
     "event": "Activitat",
