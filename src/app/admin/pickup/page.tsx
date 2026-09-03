@@ -46,7 +46,7 @@ export default async function PickupPage({
                 {r.activity_title} · {r.variant_name} ×{r.quantity}
               </p>
             </div>
-            <CollectToggle orderItemId={r.order_item_id} collected={r.checked_in_at !== null} />
+            <CollectToggle orderItemId={r.order_item_id} collected={r.collected_at !== null} />
           </div>
         ))}
       </div>

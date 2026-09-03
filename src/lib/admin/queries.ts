@@ -327,6 +327,7 @@ export interface PickupRow {
   variant_name: string;
   quantity: number;
   checked_in_at: string | null;
+  collected_at: string | null;
 }
 
 export async function searchPickup(query: string): Promise<PickupRow[]> {
@@ -334,7 +335,8 @@ export async function searchPickup(query: string): Promise<PickupRow[]> {
   const { results } = await db
     .prepare(
       `SELECT oi.id AS order_item_id, o.buyer_name, o.buyer_email,
-              a.title_ca AS activity_title, v.name_ca AS variant_name, oi.quantity, oi.checked_in_at
+              a.title_ca AS activity_title, COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
+              oi.quantity, oi.checked_in_at, oi.collected_at
          FROM order_item oi
          JOIN "order" o ON o.id = oi.order_id
          JOIN variant v ON v.id = oi.variant_id

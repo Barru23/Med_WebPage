@@ -10,6 +10,8 @@
 # opennext / cloudflare build output
 /.open-next/
 .wrangler/
+.wrangler-dev-appdata/
+.claude/
 .dev.vars
 .dev.vars.*
 !.dev.vars.example

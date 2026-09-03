@@ -8,7 +8,7 @@ export async function toggleCollected(orderItemId: string): Promise<void> {
   await db
     .prepare(
       `UPDATE order_item
-          SET checked_in_at = CASE WHEN checked_in_at IS NULL THEN datetime('now') ELSE NULL END
+          SET collected_at = CASE WHEN collected_at IS NULL THEN datetime('now') ELSE NULL END
         WHERE id = ?`,
     )
     .bind(orderItemId)

@@ -9,10 +9,10 @@
 //
 // Every query using this must alias the variant table as `v`.
 export const HELD_BY_STRIPE = `(
-  SELECT COALESCE(SUM(oi.quantity), 0)
-    FROM order_item oi JOIN "order" o ON o.id = oi.order_id
-   WHERE oi.variant_id = v.id AND o.status = 'pending' AND o.payment_method = 'stripe'
-     AND o.created_at > datetime('now', '-15 minutes')
+  SELECT COALESCE(SUM(sr.quantity), 0)
+    FROM stock_reservation sr
+   WHERE sr.variant_id = v.id AND sr.consumed_at IS NULL
+     AND sr.expires_at > datetime('now')
 )`;
 
 /** SQL expression for a variant's true remaining count. Requires alias `v`. */

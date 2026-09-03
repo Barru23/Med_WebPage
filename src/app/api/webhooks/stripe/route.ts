@@ -4,87 +4,49 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripe } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
 
-// CLAUDE.md §6: "Never trust the redirect to confirm payment. The webhook is
-// the only authority. Verify the Stripe signature. Make the handler
-// idempotent — Stripe retries."
 export async function POST(req: NextRequest) {
-  const signature = req.headers.get("stripe-signature");
-  if (!signature) return new NextResponse("Missing signature", { status: 400 });
-
-  const rawBody = await req.text();
-  const { env } = await getCloudflareContext({ async: true });
-  const stripe = await getStripe();
-
-  let event: Stripe.Event;
+  const signature = req.headers.get("stripe-signature"); if (!signature) return new NextResponse("Missing signature", { status: 400 });
+  const rawBody = await req.text(); const { env } = await getCloudflareContext({ async: true }); const stripe = await getStripe(); let event: Stripe.Event;
+  try { event = await stripe.webhooks.constructEventAsync(rawBody, signature, env.STRIPE_WEBHOOK_SECRET, undefined, Stripe.createSubtleCryptoProvider()); } catch { return new NextResponse("Invalid signature", { status: 400 }); }
+  const db = await getDb();
+  const inserted = await db.prepare(`INSERT OR IGNORE INTO stripe_event (id, type) VALUES (?, ?)`).bind(event.id, event.type).run();
+  if (!inserted.meta.changes) return NextResponse.json({ received: true, duplicate: true });
   try {
-    // Async + Web Crypto variant — Workers has no Node crypto for the sync path.
-    event = await stripe.webhooks.constructEventAsync(
-      rawBody,
-      signature,
-      env.STRIPE_WEBHOOK_SECRET,
-      undefined,
-      Stripe.createSubtleCryptoProvider(),
-    );
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") await confirmOrderPaid(event.data.object as Stripe.Checkout.Session);
+    else if (event.type === "checkout.session.async_payment_failed" || event.type === "checkout.session.expired") await cancelOrder(event.data.object as Stripe.Checkout.Session);
+    else if (event.type === "charge.refunded" || event.type === "charge.dispute.created") await markRefunded(event.data.object as Stripe.Charge);
   } catch {
-    return new NextResponse("Invalid signature", { status: 400 });
+    // Do not permanently acknowledge an event that failed halfway through.
+    await db.prepare(`DELETE FROM stripe_event WHERE id = ?`).bind(event.id).run();
+    return new NextResponse("Webhook processing failed", { status: 500 });
   }
-
-  switch (event.type) {
-    case "checkout.session.completed": {
-      const session = event.data.object as Stripe.Checkout.Session;
-      if (session.payment_status === "paid") await confirmOrderPaid(session);
-      break;
-    }
-    case "checkout.session.async_payment_succeeded": {
-      await confirmOrderPaid(event.data.object as Stripe.Checkout.Session);
-      break;
-    }
-    case "checkout.session.async_payment_failed": {
-      await cancelOrder(event.data.object as Stripe.Checkout.Session);
-      break;
-    }
-    default:
-      break; // acknowledge everything else so Stripe stops retrying it
-  }
-
   return NextResponse.json({ received: true });
 }
 
-async function confirmOrderPaid(session: Stripe.Checkout.Session): Promise<void> {
-  const db = await getDb();
-  const order = await db
-    .prepare(`SELECT id, status FROM "order" WHERE stripe_session_id = ?`)
-    .bind(session.id)
-    .first<{ id: string; status: string }>();
-  if (!order || order.status !== "pending") return; // unknown or already handled — idempotent
-
-  const { results: items } = await db
-    .prepare(`SELECT variant_id, quantity FROM order_item WHERE order_id = ?`)
-    .bind(order.id)
-    .all<{ variant_id: string; quantity: number }>();
-
-  const paymentIntent =
-    typeof session.payment_intent === "string" ? session.payment_intent : null;
-
+async function confirmOrderPaid(session: Stripe.Checkout.Session) {
+  const db = await getDb(); const orderId = session.metadata?.orderId;
+  if (!orderId || session.currency?.toUpperCase() !== "EUR" || session.amount_total == null) return;
+  const order = await db.prepare(`SELECT id, status, total_cents, currency FROM "order" WHERE id = ? AND stripe_session_id = ?`).bind(orderId, session.id).first<{ id: string; status: string; total_cents: number; currency: string }>();
+  if (!order || order.status !== "pending" || order.currency !== "EUR" || order.total_cents !== session.amount_total) return;
+  if (session.payment_status !== "paid" && session.status !== "complete") return;
+  const { results: items } = await db.prepare(`SELECT variant_id, quantity FROM order_item WHERE order_id = ?`).bind(order.id).all<{ variant_id: string; quantity: number }>();
+  const pi = typeof session.payment_intent === "string" ? session.payment_intent : null;
   await db.batch([
-    db
-      .prepare(
-        `UPDATE "order" SET status = 'paid', paid_at = datetime('now'), stripe_payment_intent = ?
-         WHERE id = ?`,
-      )
-      .bind(paymentIntent, order.id),
-    ...items.map((item) =>
-      db
-        .prepare(`UPDATE variant SET sold = sold + ? WHERE id = ?`)
-        .bind(item.quantity, item.variant_id),
-    ),
+    db.prepare(`UPDATE "order" SET status = 'paid', paid_at = datetime('now'), stripe_payment_intent = ? WHERE id = ? AND status = 'pending'`).bind(pi, order.id),
+    ...items.map((item) => db.prepare(`UPDATE variant SET sold = sold + ? WHERE id = ?`).bind(item.quantity, item.variant_id)),
+    db.prepare(`UPDATE stock_reservation SET consumed_at = datetime('now') WHERE order_id = ? AND consumed_at IS NULL`).bind(order.id),
   ]);
 }
 
-async function cancelOrder(session: Stripe.Checkout.Session): Promise<void> {
-  const db = await getDb();
-  await db
-    .prepare(`UPDATE "order" SET status = 'cancelled' WHERE stripe_session_id = ? AND status = 'pending'`)
-    .bind(session.id)
-    .run();
+async function cancelOrder(session: Stripe.Checkout.Session) {
+  const db = await getDb(); const orderId = session.metadata?.orderId; if (!orderId) return;
+  await db.batch([
+    db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ? AND stripe_session_id = ? AND status = 'pending'`).bind(orderId, session.id),
+    db.prepare(`UPDATE stock_reservation SET expires_at = datetime('now') WHERE order_id = ? AND consumed_at IS NULL`).bind(orderId),
+  ]);
+}
+
+async function markRefunded(charge: Stripe.Charge) {
+  const db = await getDb(); const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : null; if (!pi) return;
+  await db.prepare(`UPDATE "order" SET status = 'refunded' WHERE stripe_payment_intent = ? AND status = 'paid'`).bind(pi).run();
 }

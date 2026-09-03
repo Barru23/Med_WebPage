@@ -16,7 +16,7 @@ export async function checkIn(rawCode: string): Promise<CheckInResult> {
   if (!already) {
     const db = await getDb();
     await db
-      .prepare(`UPDATE order_item SET checked_in_at = datetime('now') WHERE id = ?`)
+      .prepare(`UPDATE order_item SET checked_in_at = datetime('now') WHERE id = ? AND checked_in_at IS NULL`)
       .bind(ticket.order_item_id)
       .run();
   }

@@ -183,7 +183,8 @@ export async function getTicketByCode(code: string): Promise<TicketPage | null> 
     .prepare(
       `SELECT oi.ticket_code, oi.quantity, oi.checked_in_at,
               o.status AS order_status, o.buyer_name,
-              v.name_ca AS variant_name_ca, v.name_es AS variant_name_es, v.name_en AS variant_name_en,
+              COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name_ca,
+              v.name_es AS variant_name_es, v.name_en AS variant_name_en,
               a.slug AS activity_slug,
               a.title_ca AS activity_title_ca, a.title_es AS activity_title_es, a.title_en AS activity_title_en
          FROM order_item oi
@@ -231,7 +232,8 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt | n
   const { results: items } = await db
     .prepare(
       `SELECT oi.ticket_code, oi.quantity, oi.checked_in_at,
-              v.name_ca AS variant_name_ca, v.name_es AS variant_name_es, v.name_en AS variant_name_en
+              COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name_ca,
+              v.name_es AS variant_name_es, v.name_en AS variant_name_en
          FROM order_item oi JOIN variant v ON v.id = oi.variant_id
         WHERE oi.order_id = ?`,
     )
