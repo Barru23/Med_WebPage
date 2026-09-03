@@ -17,9 +17,10 @@ export default function DepartmentNav({
   departments: DepartmentNavItem[];
 }) {
   const pathname = usePathname();
+  const isHome = pathname === `/${locale}` || pathname === `/${locale}/`;
   const navRef = useRef<HTMLDivElement>(null);
   const [previewSlug, setPreviewSlug] = useState<string | null>(null);
-  const [indicator, setIndicator] = useState({ left: 0, width: 0, visible: false });
+  const [indicator, setIndicator] = useState({ x: 0, visible: false });
   const activeSlug = departments.find((department) =>
     pathname.startsWith(`/${locale}/d/${department.slug}`),
   )?.slug;
@@ -34,7 +35,10 @@ export default function DepartmentNav({
     const update = () => {
       const item = nav.querySelector<HTMLElement>(`[data-department="${CSS.escape(selectedSlug)}"]`);
       if (!item) return;
-      setIndicator({ left: item.offsetLeft, width: item.offsetWidth, visible: true });
+      setIndicator({
+        x: item.offsetLeft + item.offsetWidth / 2 - 5,
+        visible: true,
+      });
     };
     update();
     const observer = new ResizeObserver(update);
@@ -42,11 +46,13 @@ export default function DepartmentNav({
     return () => observer.disconnect();
   }, [selectedSlug]);
 
+  if (isHome) return null;
+
   return (
     <nav aria-label="Departaments" className="overflow-x-auto px-5 pb-2">
       <div
         ref={navRef}
-        className="relative mx-auto flex w-max min-w-full items-center justify-center gap-1"
+        className="relative mx-auto flex w-max min-w-full items-center justify-center gap-1 pb-3"
         onPointerLeave={() => setPreviewSlug(null)}
         onBlur={(event) => {
           if (!event.currentTarget.contains(event.relatedTarget)) setPreviewSlug(null);
@@ -54,11 +60,10 @@ export default function DepartmentNav({
       >
         <span
           aria-hidden
-          className="absolute inset-y-0 left-0 rounded-full bg-signal transition-[transform,width,opacity] duration-300 ease-out"
+          className="absolute bottom-0 left-0 h-2.5 w-2.5 rounded-full bg-signal transition-[transform,opacity] duration-300 ease-out"
           style={{
-            width: indicator.width,
             opacity: indicator.visible ? 1 : 0,
-            transform: `translateX(${indicator.left}px)`,
+            transform: `translateX(${indicator.x}px)`,
           }}
         />
         {departments.map((department) => (
@@ -70,7 +75,7 @@ export default function DepartmentNav({
             onFocus={() => setPreviewSlug(department.slug)}
             aria-current={activeSlug === department.slug ? "page" : undefined}
             className={`relative z-10 rounded-full px-4 py-1.5 font-mono text-[0.68rem] uppercase tracking-widest outline-none transition-colors focus-visible:ring-2 focus-visible:ring-ink focus-visible:ring-offset-2 focus-visible:ring-offset-bone ${
-              selectedSlug === department.slug ? "text-bone" : "text-ink/65 hover:text-ink"
+              selectedSlug === department.slug ? "text-signal" : "text-ink/65 hover:text-ink"
             }`}
           >
             {department.name}
