@@ -1,11 +1,14 @@
 // Shared "how many of this variant are actually free right now" logic.
 //
-// CLAUDE.md §4: "Stock is decremented on confirmed payment, not on checkout
-// start. Hold inventory for 15 minutes during an open Stripe session, then
-// release." We never mutate stock/sold for a hold — sold only moves on
-// confirmed payment — so the hold is computed on the fly from still-pending
-// Stripe orders younger than 15 minutes. It "releases" itself the moment
-// that window passes, with no cleanup job required.
+// CLAUDE.md §4: stock is decremented on confirmed payment, not on checkout
+// start; inventory is held while a Stripe session is open, then released. We
+// never mutate stock/sold for a hold — sold only moves on confirmed payment —
+// so the hold is read from each reservation's own expires_at. It releases
+// itself the moment that timestamp passes, with no cleanup job required.
+//
+// The window is HOLD_MS in src/lib/actions/checkout.ts and is thirty minutes,
+// not the fifteen §4 asks for: Stripe will not create a Checkout Session that
+// expires any sooner.
 //
 // Every query using this must alias the variant table as `v`.
 export const HELD_BY_STRIPE = `(

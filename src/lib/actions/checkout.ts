@@ -11,6 +11,16 @@ import { aggregateByVariant, totalUnits } from "@/lib/orders";
 import type { Locale } from "@/lib/locales";
 
 async function siteOrigin() { const h = await headers(); return `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`; }
+
+// How long a seat is held while the buyer is inside Stripe Checkout.
+//
+// CLAUDE.md §4 says fifteen minutes, but Stripe refuses to create a Checkout
+// Session that expires sooner than thirty ("It can be anywhere from 30 minutes
+// to 24 hours after Checkout Session creation"), so fifteen is not available to
+// us. The hold and the session must expire together: a shorter hold would
+// release the seat while the buyer can still pay for it, and the webhook would
+// then confirm an order for stock somebody else had already bought.
+const HOLD_MS = 30 * 60 * 1000;
 export type CheckoutState = { error?: string } | null;
 interface CheckoutLine { variantId: string; quantity: number; answers: Record<string, string> }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -50,7 +60,7 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
     for (const f of requiredFields) if (!answers[f.id]?.trim()) return { error: `Falta la resposta a "${f.label_ca}".` };
     total += v.price_cents * line.quantity; resolved.push({ variantId: v.id, variantName: v.name_ca, quantity: line.quantity, answers, priceCents: v.price_cents });
   }
-  const orderId = newId("ord"); const paidNow = total === 0; const codes = await Promise.all(resolved.map(() => uniqueTicketCode(db))); const expiresAt = utcNow(900000);
+  const orderId = newId("ord"); const paidNow = total === 0; const codes = await Promise.all(resolved.map(() => uniqueTicketCode(db))); const expiresAt = utcNow(HOLD_MS);
   const statements = [db.prepare(`INSERT INTO "order" (id, activity_id, edition, buyer_name, buyer_email, buyer_phone, total_cents, currency, status, payment_method, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'EUR', ?, ?, datetime('now'), ?)`).bind(orderId, activity.id, activity.edition, buyerName, buyerEmail, buyerPhone, total, paidNow ? "paid" : "pending", paidNow ? "manual" : "stripe", paidNow ? utcNow() : null)];
   resolved.forEach((line, i) => statements.push(db.prepare(`INSERT INTO order_item (id, order_id, variant_id, quantity, field_answers_json, ticket_code, variant_name_snapshot, unit_price_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(newId("oi"), orderId, line.variantId, line.quantity, Object.keys(line.answers).length ? JSON.stringify(line.answers) : null, codes[i], line.variantName, line.priceCents)));
   for (const [variantId, quantity] of wanted) {
@@ -60,6 +70,14 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   await db.batch(statements);
   if (!paidNow) { const r = await db.prepare(`SELECT COUNT(*) AS count FROM stock_reservation WHERE order_id = ?`).bind(orderId).first<{ count: number }>(); if ((r?.count ?? 0) !== wanted.size) { await db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ?`).bind(orderId).run(); return { error: "No queden prou unitats disponibles. Torna-ho a provar." }; } }
   let destination = codes.length === 1 ? `/${locale}/t/${codes[0]}` : `/${locale}/o/${orderId}`;
-  if (!paidNow) { try { const stripe = await getStripe(); const origin = await siteOrigin(); const session = await stripe.checkout.sessions.create({ mode: "payment", payment_method_types: ["card", "bizum"], customer_email: buyerEmail, line_items: resolved.map((line) => ({ quantity: line.quantity, price_data: { currency: "eur", unit_amount: line.priceCents, product_data: { name: line.variantName } } })), success_url: `${origin}${destination}`, cancel_url: `${origin}/${locale}/a/${activitySlug}`, metadata: { orderId }, expires_at: Math.floor(Date.now() / 1000) + 900 }); if (!session.url) throw new Error("Missing Stripe URL"); await db.prepare(`UPDATE "order" SET stripe_session_id = ? WHERE id = ? AND status = 'pending'`).bind(session.id, orderId).run(); destination = session.url; } catch { await db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ? AND status = 'pending'`).bind(orderId).run(); return { error: "No s'ha pogut connectar amb Stripe. Torna-ho a provar." }; } }
+  if (!paidNow) { try { const stripe = await getStripe(); const origin = await siteOrigin(); const session = await stripe.checkout.sessions.create({ mode: "payment", payment_method_types: ["card", "bizum"], customer_email: buyerEmail, line_items: resolved.map((line) => ({ quantity: line.quantity, price_data: { currency: "eur", unit_amount: line.priceCents, product_data: { name: line.variantName } } })), success_url: `${origin}${destination}`, cancel_url: `${origin}/${locale}/a/${activitySlug}`, metadata: { orderId }, expires_at: Math.floor((Date.now() + HOLD_MS) / 1000) }); if (!session.url) throw new Error("Missing Stripe URL"); await db.prepare(`UPDATE "order" SET stripe_session_id = ? WHERE id = ? AND status = 'pending'`).bind(session.id, orderId).run(); destination = session.url; } catch (err) {
+    // The buyer gets one calm sentence; the reason goes to the Worker log,
+    // where whoever is on call can actually read it. Stripe's messages name
+    // the offending field ("expires_at", an unavailable payment method), which
+    // is the difference between a five-minute fix and an afternoon.
+    console.error("[checkout] Stripe session failed", { orderId, message: err instanceof Error ? err.message : String(err) });
+    await db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ? AND status = 'pending'`).bind(orderId).run();
+    return { error: "No s'ha pogut connectar amb Stripe. Torna-ho a provar." };
+  } }
   revalidatePath("/[locale]/a/[slug]", "page"); revalidatePath("/[locale]/d/[slug]", "page"); revalidatePath("/admin/activities"); redirect(destination);
 }

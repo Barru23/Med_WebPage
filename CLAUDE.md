@@ -119,7 +119,9 @@ OrderItem
   Fields (DNI, allergies, emergency contact, bus stop)
 
 Stock is decremented on **confirmed payment**, not on checkout start. Hold
-inventory for 15 minutes during an open Stripe session, then release.
+inventory for 30 minutes during an open Stripe session, then release. Thirty,
+not fifteen: Stripe refuses to create a Checkout Session that expires sooner,
+and the hold has to outlast the session the buyer can still pay through.
 
 ---
 
