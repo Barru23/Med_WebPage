@@ -9,10 +9,15 @@
   // path rather than short-circuiting.
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 
-  // No <name>.<subdomain>.workers.dev URL. Without this the whole site — the
-  // admin panel included — is also served from an address nobody remembers to
-  // protect, alongside the real domain.
-  "workers_dev": false,
+  // The free <name>.<subdomain>.workers.dev address is the site's only home for
+  // now — no domain has been bought, and this is what Stripe's webhook will
+  // call. Safe here because /admin is guarded by the password in src/lib/auth.ts,
+  // which protects every hostname equally.
+  //
+  // If a Cloudflare Access application is ever added over "<domain>/admin*",
+  // set this back to false first: Access is configured per hostname, so leaving
+  // workers.dev reachable would hand out an unprotected way in.
+  "workers_dev": true,
 
   // Static assets produced by the OpenNext build.
   "assets": {

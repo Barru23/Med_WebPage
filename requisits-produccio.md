@@ -81,8 +81,15 @@ i es configura al panell, continua sent recomanable.
 
 ### Comprovacions d'exposició abans d'obrir vendes
 
-- [ ] `workers_dev: false` al `wrangler.jsonc`, perquè el web no quedi també
-      publicat a `xivarri.<subdomini>.workers.dev` sense cap protecció.
+- [ ] **Mentre no hi hagi domini propi**, el web viu a
+      `xivarri.<subdomini>.workers.dev` i `workers_dev` ha d'estar a `true`.
+      No és cap forat: `/admin` el protegeix la contrasenya de l'aplicació, que
+      val igual per a qualsevol adreça.
+- [ ] **Si algun dia s'afegeix Cloudflare Access** sobre `<domini>/admin*`,
+      posar `workers_dev: false` **abans**. Access es configura per domini, i
+      deixar `workers.dev` obert seria una porta del darrere sense pany.
+- [ ] En comprar el domini: connectar-lo, canviar l'URL del webhook a Stripe i
+      avisar que els enllaços antics deixaran de funcionar.
 - [ ] Des d'una finestra d'incògnit, `/admin` mostra la pantalla de contrasenya
       i **cap** dada d'activitats ni de compradors.
 - [ ] `/admin/sales/<slug>/export` respon 401 sense sessió.
