@@ -41,12 +41,23 @@ needs explanation, the design is wrong.
   Vercel's Hobby tier does not — do not deploy there)
 - **Database:** Cloudflare D1 (SQLite)
 - **File storage:** Cloudflare R2 (posters, merch photos)
-- **Admin auth:** Cloudflare Access (Zero Trust), email allowlist. No custom
-  auth code, no password storage, no reset flows.
+- **Admin auth:** one **shared password**, held as the Cloudflare secret
+  `ADMIN_PASSWORD` and never in the database or in Git. The session cookie is
+  signed with the password itself, so rotating it logs everyone out at once —
+  which is what you want the day someone leaves the team. Checked in
+  `src/proxy.ts` before any admin route runs, and again in the admin layout,
+  the export route handler and every admin server action.
+  A Cloudflare Access application over `/admin*` is an optional and recommended
+  second layer, but it is no longer the only lock.
 - **Payments:** Stripe Checkout (hosted). Cards + Apple/Google Pay + **Bizum**.
   Bizum is not optional — it is the majority payment method for this audience.
-- **Email:** Resend. Free tier is ~100/day, so email is a *backup* delivery
-  channel, never the primary one (see §6).
+- **Email + live sheet:** a single **Google Apps Script** web app, owned by the
+  shared `xivarri@…` account. The Stripe webhook posts a paid order to it once;
+  the script appends the row to the sheet *and* emails the buyer their code.
+  `MailApp` on a consumer Google account allows ~100 recipients/day, so email
+  stays a *backup* delivery channel, never the primary one (see §6). Mail sent
+  from a plain Gmail address lands in spam more often than mail from a verified
+  domain — the on-screen code after payment is the channel that must work.
 - **Excel:** `exceljs`, generated server-side on demand.
 
 Buyers never create accounts. Guest checkout only, email address as identity.
@@ -155,12 +166,15 @@ Buyer picks variants + fills fields
   → buyer pays
   → Stripe webhook → Order.status=paid, generate ticket_code per OrderItem
   → buyer redirected to /t/{ticket_code}
-  → email queued as backup copy
+  → Apps Script relay: sheet row + email carrying the code
 ```
 
-**The ticket lives at a URL, not in an attachment.** `/t/{ticket_code}` renders
-the QR full-screen so the buyer can screenshot it immediately. This is what
-keeps us inside the free email tier when 250 people buy in one evening.
+**The ticket lives at a URL, not in an attachment.** `/t/{ticket_code}` shows
+the short code large enough to screenshot immediately, with the QR alongside it
+for anyone who prefers to be scanned. **The code, not the QR, is what the door
+runs on** — it is short, readable off a cracked screen, and works when the
+email arrives but the link does not. Keeping delivery to a URL plus one email
+is what survives 250 people buying in a single evening.
 
 Never trust the redirect to confirm payment. The webhook is the only authority.
 Verify the Stripe signature. Make the handler idempotent — Stripe retries.
@@ -172,7 +186,10 @@ site by marking the order refunded. No self-service refunds in v1.
 
 ## 7. Admin panel — exactly five screens
 
-Everything lives under `/admin`, behind Cloudflare Access.
+Everything lives under `/admin`, behind the shared password of §3. The check
+runs in `src/proxy.ts`, *before* the route renders — a layout that declines to
+render its children still lets those children query the database and ship the
+answer inside the response payload.
 
 **Departments.** The most boring screen in the panel: name in three languages,
 photo, drag to reorder. Nothing else.
@@ -192,21 +209,24 @@ Two exports, and they are not equivalent:
 - **Download Excel** — generated fresh from the database on every press. Columns
   adapt automatically to that activity's custom Fields. This is the source of
   truth. Coach manifest for a trip, size counts for merch.
-- **Live Google Sheet** — a mirror, updated on each new paid order via the
-  Sheets API. Convenient for sharing with non-admins and for several people
-  reading at once. It is a copy and can go stale if the sync breaks, so never
-  treat it as authoritative. Owned by the shared `xivarri@…` Google account,
-  never a personal one.
+- **Live Google Sheet** — a mirror, updated on each new paid order by the Apps
+  Script relay of §3, idempotent on `order_id` so a Stripe retry cannot double
+  a row. Convenient for sharing with non-admins and for several people reading
+  at once. It is a copy and can go stale if the sync breaks, so never treat it
+  as authoritative. Owned by the shared `xivarri@…` Google account, never a
+  personal one.
 
-**Door.** A phone page. Opens the camera, scans a QR, shows a large green or
-red result, and writes `checked_in_at` so a screenshotted code cannot be reused.
+**Door.** A phone page. Type the buyer's code — or scan their QR if they have
+one — and get a large green or red result. Writes `checked_in_at` so a
+screenshotted code cannot be reused. Typing must always work on its own: the
+camera is the convenience, not the requirement.
 
 **Pickup.** For merch: search a name, tick collected.
 
 **Deletion is blocked once an order exists.** An activity with paid orders
 cannot be deleted — the delete button explains why and points at the Publish
 switch instead. Deleting would destroy the record of real payments and
-invalidate QR codes people are holding on their phones. Activities with zero
+invalidate codes people are holding on their phones. Activities with zero
 orders delete normally. Departments containing activities cannot be deleted
 either.
 
@@ -329,18 +349,20 @@ Cartell department page, Història clínica activity page. Real data from D1.
 Trilingual routing with Catalan fallback. This is the milestone to look at
 together before going further.
 
-**4 — Admin panel.** Cloudflare Access on `/admin`. Five screens per §7.
-Departments, Activities with Duplicate, Sales, Door, Pickup. Deletion blocked
-per the rule in §7.
+**4 — Admin panel.** Shared-password gate on `/admin` per §3. Five screens per
+§7. Departments, Activities with Duplicate, Sales, Door, Pickup. Deletion
+blocked per the rule in §7.
 
 **5 — Orders without Stripe.** Registration flow, `payment_method: 'manual'`,
-admin marks paid, €0 variants skip payment entirely. QR ticket at
-`/t/{code}`. Excel download. This version is shippable for a first activity.
+admin marks paid, €0 variants skip payment entirely. Ticket at `/t/{code}`.
+Excel download. This version is shippable for a first activity.
 
 **6 — Stripe.** Test mode first. Checkout with cards and Bizum, webhook,
 idempotent handler, stock held 15 minutes. Live keys only after §9 is resolved.
 
-**7 — Extras.** Google Sheets mirror. Legal pages. Then launch.
+**7 — Extras.** The Apps Script relay of §3 — sheet row and buyer email in one
+call from the webhook. Legal pages and the terms checkbox at checkout. Then
+launch.
 
 
 
@@ -363,8 +385,8 @@ idempotent handler, stock held 15 minutes. Live keys only after §9 is resolved.
 >
 > Screens: (1) home with upcoming activities, (2) activity detail with ticket
 > types, (3) checkout with buyer details and custom questions, (4) the ticket
-> page showing a full-screen QR, (5) admin activity editor, (6) admin sales
-> dashboard with an Excel download.
+> page showing a large, screenshot-friendly code, (5) admin activity editor,
+> (6) admin sales dashboard with an Excel download.
 >
 > Keep it to three colours per screen. Spend the boldness on the seam grid and
 > keep everything else quiet.
