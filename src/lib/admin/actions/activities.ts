@@ -2,10 +2,12 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { slugify } from "@/lib/slug";
 import { saveMedia } from "@/lib/storage";
+import { wallTimeToUtc } from "@/lib/time";
 import { eurosToCents } from "@/lib/admin/activityForm";
 import type { VariantDraft, FieldDraft } from "@/lib/admin/activityForm";
 import type {
@@ -103,9 +105,10 @@ function validateImages(files: File[]): string | null {
 }
 
 function toDatetime(v: string): string | null {
-  // <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm" (local, no zone).
-  // Stored as-is in SQLite text form; good enough at this scale (single TZ).
-  return v ? v.replace("T", " ") + ":00" : null;
+  // <input type="datetime-local"> gives "YYYY-MM-DDTHH:mm" with no zone — it
+  // means "this time in Girona". Stored as UTC so the sale-window comparisons
+  // against SQLite's datetime('now') (also UTC) line up. See src/lib/time.ts.
+  return wallTimeToUtc(v);
 }
 
 async function replaceVariantsAndFields(
@@ -248,6 +251,7 @@ export async function createActivity(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const titleCa = str(formData.get("title_ca"));
   const departmentId = str(formData.get("department_id"));
   const type = str(formData.get("type"));
@@ -347,6 +351,7 @@ export async function updateActivity(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const id = str(formData.get("id"));
   const titleCa = str(formData.get("title_ca"));
   const departmentId = str(formData.get("department_id"));
@@ -460,6 +465,7 @@ export async function updateActivity(
 }
 
 export async function duplicateActivity(id: string): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   const activity = await db.prepare(`SELECT * FROM activity WHERE id=?`).bind(id).first<{
     department_id: string;
@@ -588,6 +594,7 @@ export async function setActivityArchived(
   id: string,
   archived: boolean,
 ): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   await db
     .prepare(
@@ -609,6 +616,7 @@ export async function deleteActivity(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const id = str(formData.get("id"));
   if (!id) return { error: "Falta l'identificador." };
 

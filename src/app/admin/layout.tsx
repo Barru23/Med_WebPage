@@ -1,5 +1,7 @@
 import Link from "next/link";
-import { getAccessEmail } from "@/lib/access";
+import { redirect } from "next/navigation";
+import { isAdmin } from "@/lib/auth";
+import { logout } from "@/lib/admin/actions/auth";
 
 const NAV = [
   { href: "/admin/departments", label: "Departaments" },
@@ -13,7 +15,10 @@ export default async function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const email = await getAccessEmail();
+  // src/proxy.ts already turned unauthenticated admin requests into the login
+  // screen, so this should be unreachable. It stays as a second lock: if the
+  // proxy is ever misconfigured, the panel fails closed rather than open.
+  if (!(await isAdmin())) redirect("/entrar");
 
   return (
     <div className="flex min-h-dvh flex-col bg-bone text-ink">
@@ -22,9 +27,14 @@ export default async function AdminLayout({
           <Link href="/admin/departments" className="font-display text-xl tracking-tight">
             XIVARRI <span className="text-signal">admin</span>
           </Link>
-          <span className="font-mono text-[0.65rem] text-ink/50">
-            {email ?? "accés local (sense Cloudflare Access)"}
-          </span>
+          <form action={logout}>
+            <button
+              type="submit"
+              className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/50 underline underline-offset-4 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+            >
+              Sortir
+            </button>
+          </form>
         </div>
         <nav className="flex gap-1 overflow-x-auto px-4 pb-2 font-mono text-xs uppercase tracking-widest">
           {NAV.map((item) => (

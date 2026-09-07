@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { slugify } from "@/lib/slug";
@@ -17,6 +18,7 @@ export async function createDepartment(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const nameCa = str(formData.get("name_ca"));
   if (!nameCa) return { error: "El nom en català és obligatori." };
 
@@ -53,6 +55,7 @@ export async function updateDepartment(
   _prev: ActionState,
   formData: FormData,
 ): Promise<ActionState> {
+  await requireAdmin();
   const id = str(formData.get("id"));
   const nameCa = str(formData.get("name_ca"));
   if (!id || !nameCa) return { error: "El nom en català és obligatori." };
@@ -81,6 +84,7 @@ export async function updateDepartment(
 }
 
 export async function reorderDepartments(orderedIds: string[]): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   await db.batch(
     orderedIds.map((id, position) =>

@@ -1,6 +1,7 @@
 import ExcelJS from "exceljs";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSalesExport } from "@/lib/admin/queries";
+import { isAdmin } from "@/lib/auth";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendent",
@@ -13,6 +14,9 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ slug: string }> },
 ) {
+  // No layout runs above a route handler, so the buyer list is guarded here.
+  if (!(await isAdmin())) return new NextResponse("No autoritzat", { status: 401 });
+
   const { slug } = await params;
   const edition = req.nextUrl.searchParams.get("edition") ?? undefined;
 

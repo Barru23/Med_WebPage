@@ -1,9 +1,11 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 export async function toggleCollected(orderItemId: string): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   await db
     .prepare(

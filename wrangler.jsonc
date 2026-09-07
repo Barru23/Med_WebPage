@@ -9,6 +9,11 @@
   // path rather than short-circuiting.
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
 
+  // No <name>.<subdomain>.workers.dev URL. Without this the whole site — the
+  // admin panel included — is also served from an address nobody remembers to
+  // protect, alongside the real domain.
+  "workers_dev": false,
+
   // Static assets produced by the OpenNext build.
   "assets": {
     "binding": "ASSETS",
@@ -47,9 +52,14 @@
   // deliberate step). Resend keys etc. join this list in a later step.
 
   // ---- Admin auth (CLAUDE.md §3 / §7) --------------------------------------
-  // Cloudflare Access on /admin* is a Zero Trust dashboard config (Access ->
-  // Applications -> add "xivarri.<domain>/admin*", policy: email allowlist),
-  // not something wrangler.jsonc can express. Do this once a custom domain is
-  // attached. The app never implements its own login — src/lib/access.ts only
-  // reads the identity header Access injects once that's set up.
+  // One shared password, set with `wrangler secret put ADMIN_PASSWORD`, and
+  // checked by src/lib/auth.ts in the admin layout, the export route handler
+  // and every admin server action. Nothing reaches /admin without it.
+  //
+  // Rotate it whenever someone leaves the team: the session cookie is signed
+  // with the password, so changing it logs everyone out at once.
+  //
+  // Optional second layer, recommended: a Cloudflare Access application over
+  // "<domain>/admin*" with an email allowlist. It costs no code and means a
+  // leaked password alone is not enough.
 }

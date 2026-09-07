@@ -1,4 +1,5 @@
 import type { Locale } from "@/lib/locales";
+import { SITE_TIMEZONE } from "@/lib/time";
 
 const intlLocale: Record<Locale, string> = {
   ca: "ca-ES",
@@ -22,6 +23,7 @@ export function formatDate(iso: string | null, locale: Locale): string | null {
   const date = new Date(normalized);
   if (Number.isNaN(date.getTime())) return null;
   return new Intl.DateTimeFormat(intlLocale[locale], {
+    timeZone: SITE_TIMEZONE,
     day: "numeric",
     month: "long",
     year: "numeric",

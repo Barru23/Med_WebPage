@@ -1,5 +1,6 @@
 "use server";
 
+import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { findTicket } from "@/lib/admin/queries";
 
@@ -8,6 +9,7 @@ export type CheckInResult =
   | { ok: false; reason: "not_found" | "not_paid" };
 
 export async function checkIn(rawCode: string): Promise<CheckInResult> {
+  await requireAdmin();
   const ticket = await findTicket(rawCode);
   if (!ticket) return { ok: false, reason: "not_found" };
   if (ticket.order_status !== "paid") return { ok: false, reason: "not_paid" };

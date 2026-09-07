@@ -28,7 +28,10 @@ async function confirmOrderPaid(session: Stripe.Checkout.Session) {
   if (!orderId || session.currency?.toUpperCase() !== "EUR" || session.amount_total == null) return;
   const order = await db.prepare(`SELECT id, status, total_cents, currency FROM "order" WHERE id = ? AND stripe_session_id = ?`).bind(orderId, session.id).first<{ id: string; status: string; total_cents: number; currency: string }>();
   if (!order || order.status !== "pending" || order.currency !== "EUR" || order.total_cents !== session.amount_total) return;
-  if (session.payment_status !== "paid" && session.status !== "complete") return;
+  // Only the money says paid. A delayed-notification method sends
+  // checkout.session.completed with payment_status "unpaid" and status
+  // "complete"; that order is confirmed later by async_payment_succeeded.
+  if (session.payment_status !== "paid") return;
   const { results: items } = await db.prepare(`SELECT variant_id, quantity FROM order_item WHERE order_id = ?`).bind(order.id).all<{ variant_id: string; quantity: number }>();
   const pi = typeof session.payment_intent === "string" ? session.payment_intent : null;
   await db.batch([
@@ -48,5 +51,16 @@ async function cancelOrder(session: Stripe.Checkout.Session) {
 
 async function markRefunded(charge: Stripe.Charge) {
   const db = await getDb(); const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : null; if (!pi) return;
-  await db.prepare(`UPDATE "order" SET status = 'refunded' WHERE stripe_payment_intent = ? AND status = 'paid'`).bind(pi).run();
+  // Refunding has to give the seat back. `sold` was incremented on payment, so
+  // leaving it alone would burn a unit of capacity per refund — 100 places with
+  // 5 refunds would only ever sell 95. Guarded by status = 'paid' so a repeated
+  // refund/dispute event cannot decrement twice.
+  const order = await db.prepare(`SELECT id FROM "order" WHERE stripe_payment_intent = ? AND status = 'paid'`).bind(pi).first<{ id: string }>();
+  if (!order) return;
+  const { results: items } = await db.prepare(`SELECT variant_id, quantity FROM order_item WHERE order_id = ?`).bind(order.id).all<{ variant_id: string; quantity: number }>();
+  await db.batch([
+    db.prepare(`UPDATE "order" SET status = 'refunded' WHERE id = ? AND status = 'paid'`).bind(order.id),
+    // MAX(...) keeps the CHECK (sold >= 0) safe if the counts ever disagree.
+    ...items.map((item) => db.prepare(`UPDATE variant SET sold = MAX(sold - ?, 0) WHERE id = ?`).bind(item.quantity, item.variant_id)),
+  ]);
 }

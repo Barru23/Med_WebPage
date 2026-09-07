@@ -3,6 +3,7 @@
 // don't appear in it. This merges them into the same global CloudflareEnv
 // interface by declaration merging.
 interface CloudflareEnv {
+  ADMIN_PASSWORD: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
 }

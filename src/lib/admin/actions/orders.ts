@@ -1,10 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 
 /** Admin marks a manual (non-Stripe) order as paid — CLAUDE.md §11 step 5. */
 export async function markOrderPaid(orderId: string): Promise<void> {
+  await requireAdmin();
   const db = await getDb();
   const order = await db
     .prepare(`SELECT id, status FROM "order" WHERE id = ? AND payment_method = 'manual'`)

@@ -1,3 +1,5 @@
+import { utcToWallTime } from "@/lib/time";
+
 // Shared shape for the variant/field editors in ActivityForm (client) and
 // the createActivity/updateActivity server actions. Serialized to JSON in
 // hidden form fields rather than name="variants[0].x" indexing.
@@ -76,8 +78,8 @@ export function centsToEuros(cents: number): string {
   return (cents / 100).toFixed(2);
 }
 
-/** SQLite "YYYY-MM-DD HH:MM:SS" -> <input type="datetime-local"> value. */
+/** Stored UTC "YYYY-MM-DD HH:MM:SS" -> <input type="datetime-local"> value,
+ *  converted back to the Girona clock the admin typed it on. */
 export function toInputDatetime(v: string | null): string {
-  if (!v) return "";
-  return v.replace(" ", "T").slice(0, 16);
+  return utcToWallTime(v);
 }
