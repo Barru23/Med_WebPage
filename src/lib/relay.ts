@@ -31,6 +31,11 @@ export interface RelayPayload {
   buyer_phone: string;
   activity: string;
   edition: string;
+  /** The activity's custom questions, in the order the admin arranged them.
+   *  The script turns these into real columns on that activity's tab, so a
+   *  trip's DNI and allergies can be sorted and filtered instead of living
+   *  squashed inside one cell. */
+  field_labels: string[];
   payment_method: string;
   total_eur: number;
   ticket_url_base: string;
@@ -116,6 +121,7 @@ export async function buildRelayPayload(
     buyer_phone: order.buyer_phone ?? "",
     activity: order.activity_title,
     edition: order.edition ?? "",
+    field_labels: fields.map((f) => f.label_ca),
     payment_method: order.payment_method,
     total_eur: order.total_cents / 100,
     ticket_url_base: `${origin}/ca/t/`,

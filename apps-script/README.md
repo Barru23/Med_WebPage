@@ -27,9 +27,9 @@ correus se'n van amb ella.
 
 ### 1. Crea el full
 
-A [sheets.google.com](https://sheets.google.com), full nou. Anomena'l
-**XIVARRI — Comandes**. No cal preparar-hi res: el script crea la pestanya i
-les capçaleres sol la primera vegada.
+A [sheets.google.com](https://sheets.google.com), **un sol full** per a tot.
+Anomena'l **XIVARRI — Comandes**. No cal preparar-hi res ni crear cap pestanya:
+el script les crea totes soles.
 
 ### 2. Obre l'editor de scripts
 
@@ -64,8 +64,11 @@ l'aplicació no està verificada — és normal, l'has escrit tu. Clica
 
 Han de passar dues coses:
 
-- apareix una pestanya **Comandes** al full, amb una fila de prova
-- t'arriba un correu amb el codi `PROVA1`
+- apareix una pestanya **Prova — Tardor 2026** amb dues files, i amb **DNI** i
+  **Al·lèrgies** com a columnes pròpies
+- t'arriba un correu amb els codis `PROVA1` i `PROVA2`
+
+Quan hagis comprovat que va, esborra aquella pestanya de prova.
 
 Si el correu no arriba, mira la carpeta de correu brossa. **Que hi vagi a parar
 és esperable**: surt d'una adreça `@gmail.com` i no d'un domini verificat. Per
@@ -110,6 +113,50 @@ tres coses:
 - a **Vendes**, la columna *Full / correu* amb un ✓
 
 ---
+
+## Com s'organitza el full
+
+**Una pestanya per activitat i edició**, creada sola la primera vegada que algú
+compra:
+
+```
+Medifutbol — Tardor 2026
+Medifutbol — Primavera 2027
+Mediportaventura — Tardor 2026
+Dessuadora XIVARRI — Tardor 2026
+```
+
+L'edició hi surt a posta. Medifutbol i Medipadel es reobren cada temporada
+reutilitzant el mateix registre; sense l'edició al nom, el llistat d'octubre
+acabaria barrejat amb el de març i tindríeu jugadors de fa un any a la llista
+de la setmana que ve.
+
+**Cada pestanya té les seves pròpies columnes.** Les preguntes personalitzades
+d'aquella activitat hi surten com a columnes de veritat: la de Mediportaventura
+tindrà DNI, al·lèrgies, contacte d'emergència i parada de bus, cadascuna a la
+seva, ordenables i filtrables. La de Medifutbol no en tindrà cap, perquè no en
+necessita.
+
+Si un dia afegiu una pregunta nova a una activitat que ja ven, apareix una
+columna nova al final i les files antigues segueixen quadrant. No s'ha de
+tocar res a mà.
+
+**El que NO hi trobareu són columnes de "ha entrat" o "ha recollit".** La fila
+s'escriu un sol cop, quan es paga, i aquestes columnes es quedarien congelades
+mentint la nit de l'activitat. L'estat real viu a la pantalla de **Porta** i a
+l'Excel que es descarrega des de **Vendes**, que sempre estan al dia.
+
+### Quan una activitat s'acaba: amagar, no esborrar
+
+Botó dret sobre el nom de la pestanya → **Amagar full**.
+
+L'arxiu de veritat és el botó **Descarregar Excel** de la pantalla de Vendes,
+que es genera fresc de la base de dades cada vegada i que podreu baixar d'una
+activitat de fa dos anys. Però al full de Google la gent hi escriu coses a mà
+— "aquest va pagar en efectiu", "trucar-li", "al final no ve" — i **això no
+existeix enlloc més**. Esborrar la pestanya ho perd per sempre.
+
+Amagar té el mateix efecte visual, costa dos segons i es pot desfer.
 
 ## Coses que has de saber
 
