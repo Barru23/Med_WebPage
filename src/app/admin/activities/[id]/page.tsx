@@ -9,6 +9,7 @@ import type {
   SizeGuideRowDraft,
 } from "@/lib/admin/activityForm";
 import { centsToEuros, toInputDatetime } from "@/lib/admin/activityForm";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -17,6 +18,7 @@ export default async function EditActivityPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireAdminPage();
   const { id } = await params;
   const [detail, departments] = await Promise.all([
     getAdminActivity(id),

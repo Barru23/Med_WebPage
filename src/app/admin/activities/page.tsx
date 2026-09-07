@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { listAllActivities } from "@/lib/admin/queries";
 import { setActivityArchived } from "@/lib/admin/actions/activities";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function AdminActivitiesPage({
 }: {
   searchParams: Promise<{ estat?: string }>;
 }) {
+  await requireAdminPage();
   const { estat } = await searchParams;
   const status = estat === "draft" || estat === "archived" ? estat : "active";
 

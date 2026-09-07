@@ -1,10 +1,12 @@
 import { listAllDepartments } from "@/lib/admin/queries";
 import DepartmentsList from "./DepartmentsList";
 import AddDepartmentForm from "./AddDepartmentForm";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminDepartmentsPage() {
+  await requireAdminPage();
   const departments = await listAllDepartments();
 
   return (

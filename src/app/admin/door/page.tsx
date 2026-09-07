@@ -1,5 +1,6 @@
 import { searchBuyers } from "@/lib/admin/queries";
 import DoorScanner from "./DoorScanner";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,7 @@ export default async function DoorPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requireAdminPage();
   const { q } = await searchParams;
   const query = q?.trim() ?? "";
   const results = query ? await searchBuyers(query) : [];

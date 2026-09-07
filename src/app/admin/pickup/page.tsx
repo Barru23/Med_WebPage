@@ -1,5 +1,6 @@
 import { searchPickup } from "@/lib/admin/queries";
 import CollectToggle from "./CollectToggle";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export default async function PickupPage({
 }: {
   searchParams: Promise<{ q?: string }>;
 }) {
+  await requireAdminPage();
   const { q } = await searchParams;
   const results = q && q.trim() ? await searchPickup(q.trim()) : [];
 

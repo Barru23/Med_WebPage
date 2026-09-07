@@ -1,9 +1,11 @@
 import { listAllDepartments } from "@/lib/admin/queries";
 import ActivityForm from "../ActivityForm";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewActivityPage() {
+  await requireAdminPage();
   const departments = await listAllDepartments();
 
   return (

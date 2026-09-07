@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSales } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/format";
 import MarkPaidButton from "./MarkPaidButton";
+import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -20,6 +21,7 @@ export default async function SalesPage({
   params: Promise<{ slug: string }>;
   searchParams: Promise<{ edition?: string }>;
 }) {
+  await requireAdminPage();
   const { slug } = await params;
   const { edition } = await searchParams;
   const sales = await getSales(slug, edition);

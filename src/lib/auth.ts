@@ -1,4 +1,5 @@
 import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 /**
@@ -119,6 +120,17 @@ export async function isAdmin(): Promise<boolean> {
   const password = await adminPassword();
   if (!password) return false;
   return verifySessionToken((await cookies()).get(ADMIN_COOKIE)?.value, password);
+}
+
+/**
+ * Guard for admin PAGES. Must be the first statement in the page component,
+ * before any query: a check in the layout is not enough, because a layout that
+ * declines to render its children still lets those children run and ship their
+ * data inside the response payload. Next's own guidance says the same — verify
+ * inside each function rather than relying on the proxy alone.
+ */
+export async function requireAdminPage(): Promise<void> {
+  if (!(await isAdmin())) redirect("/entrar");
 }
 
 /**
