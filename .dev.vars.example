@@ -12,3 +12,8 @@ ADMIN_PASSWORD=canvia-aixo-en-local
 
 STRIPE_SECRET_KEY=sk_test_...
 STRIPE_WEBHOOK_SECRET=whsec_...
+
+# Apps Script relay: sheet row + buyer email in one call from the webhook.
+# Leave empty and the site works, minus the email and the live sheet.
+SHEETS_RELAY_URL=
+SHEETS_RELAY_SECRET=

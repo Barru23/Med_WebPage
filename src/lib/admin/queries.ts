@@ -173,6 +173,7 @@ export interface SalesSummary {
     ticket_code: string;
     checked_in_at: string | null;
     collected_at: string | null;
+    relay_synced_at: string | null;
   }>;
 }
 
@@ -228,7 +229,8 @@ export async function getSales(
     .prepare(
       `SELECT o.id AS order_id, o.buyer_name, o.buyer_email, o.status, o.payment_method,
               o.created_at, COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
-              oi.quantity, oi.ticket_code, oi.checked_in_at, oi.collected_at
+              oi.quantity, oi.ticket_code, oi.checked_in_at, oi.collected_at,
+              o.relay_synced_at
          FROM "order" o
          JOIN order_item oi ON oi.order_id = o.id
          JOIN variant v ON v.id = oi.variant_id

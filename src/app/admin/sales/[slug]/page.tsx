@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { getSales } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/format";
 import MarkPaidButton from "./MarkPaidButton";
+import ResyncButton from "./ResyncButton";
 import { requireAdminPage } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
@@ -89,6 +90,9 @@ export default async function SalesPage({
               <th className="py-2 pr-3">Codi</th>
               <th className="py-2 pr-3">Estat</th>
               <th className="py-2 pr-3">{isMerch ? "Recollit" : "Check-in"}</th>
+              <th className="py-2 pr-3" title="Fila al full de Google i correu al comprador">
+                Full / correu
+              </th>
               <th className="py-2 pr-3">Data</th>
               <th className="py-2 pr-3" />
             </tr>
@@ -109,17 +113,29 @@ export default async function SalesPage({
                 <td className="py-2 pr-3">
                   {(isMerch ? b.collected_at : b.checked_in_at) ? "✓" : "—"}
                 </td>
+                <td className="py-2 pr-3">
+                  {b.status !== "paid" ? (
+                    "—"
+                  ) : b.relay_synced_at ? (
+                    "✓"
+                  ) : (
+                    <span className="text-signal">no enviat</span>
+                  )}
+                </td>
                 <td className="py-2 pr-3">{b.created_at}</td>
                 <td className="py-2 pr-3">
                   {b.status === "pending" && b.payment_method === "manual" && (
                     <MarkPaidButton orderId={b.order_id} />
+                  )}
+                  {b.status === "paid" && !b.relay_synced_at && (
+                    <ResyncButton orderId={b.order_id} />
                   )}
                 </td>
               </tr>
             ))}
             {sales.buyers.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-4 text-center text-ink/40">
+                <td colSpan={8} className="py-4 text-center text-ink/40">
                   Encara no hi ha comandes.
                 </td>
               </tr>

@@ -6,4 +6,8 @@ interface CloudflareEnv {
   ADMIN_PASSWORD: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
+  // Optional: the site runs without the relay, it just does not email or
+  // mirror to the sheet.
+  SHEETS_RELAY_URL?: string;
+  SHEETS_RELAY_SECRET?: string;
 }

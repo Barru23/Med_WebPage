@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripe } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
+import { syncOrderToRelay } from "@/lib/relay";
 
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature"); if (!signature) return new NextResponse("Missing signature", { status: 400 });
@@ -12,7 +13,7 @@ export async function POST(req: NextRequest) {
   const inserted = await db.prepare(`INSERT OR IGNORE INTO stripe_event (id, type) VALUES (?, ?)`).bind(event.id, event.type).run();
   if (!inserted.meta.changes) return NextResponse.json({ received: true, duplicate: true });
   try {
-    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") await confirmOrderPaid(event.data.object as Stripe.Checkout.Session);
+    if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") await confirmOrderPaid(event.data.object as Stripe.Checkout.Session, req.nextUrl.origin);
     else if (event.type === "checkout.session.async_payment_failed" || event.type === "checkout.session.expired") await cancelOrder(event.data.object as Stripe.Checkout.Session);
     else if (event.type === "charge.refunded" || event.type === "charge.dispute.created") await markRefunded(event.data.object as Stripe.Charge);
   } catch {
@@ -23,7 +24,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ received: true });
 }
 
-async function confirmOrderPaid(session: Stripe.Checkout.Session) {
+async function confirmOrderPaid(session: Stripe.Checkout.Session, origin: string) {
   const db = await getDb(); const orderId = session.metadata?.orderId;
   if (!orderId || session.currency?.toUpperCase() !== "EUR" || session.amount_total == null) return;
   const order = await db.prepare(`SELECT id, status, total_cents, currency FROM "order" WHERE id = ? AND stripe_session_id = ?`).bind(orderId, session.id).first<{ id: string; status: string; total_cents: number; currency: string }>();
@@ -39,6 +40,14 @@ async function confirmOrderPaid(session: Stripe.Checkout.Session) {
     ...items.map((item) => db.prepare(`UPDATE variant SET sold = sold + ? WHERE id = ?`).bind(item.quantity, item.variant_id)),
     db.prepare(`UPDATE stock_reservation SET consumed_at = datetime('now') WHERE order_id = ? AND consumed_at IS NULL`).bind(order.id),
   ]);
+
+  // The sheet row and the buyer's email go out after the payment is recorded,
+  // and in the background: Stripe wants a fast acknowledgement, and Apps Script
+  // is slow enough to risk a webhook timeout. A relay failure leaves
+  // relay_synced_at NULL, which the Sales screen surfaces for a manual resync —
+  // it never undoes the payment.
+  const { ctx } = await getCloudflareContext({ async: true });
+  ctx.waitUntil(syncOrderToRelay(order.id, origin));
 }
 
 async function cancelOrder(session: Stripe.Checkout.Session) {
