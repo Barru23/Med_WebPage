@@ -80,6 +80,7 @@ Activity
   title_ca, title_es, title_en
   description_ca, description_es, description_en
   poster_url, starts_at, location, edition, published: bool
+  max_per_order        -- units one buyer may take; NULL = no limit
   created_at
 
 Variant                      -- belongs to Activity
@@ -220,6 +221,10 @@ Two exports, and they are not equivalent:
 one — and get a large green or red result. Writes `checked_in_at` so a
 screenshotted code cannot be reused. Typing must always work on its own: the
 camera is the convenience, not the requirement.
+
+The same screen searches buyers by name or email. Someone turning up without
+their code is the most common incident there is, and the door is where that
+conversation happens — so the fix belongs there, not on a sixth screen.
 
 **Pickup.** For merch: search a name, tick collected.
 

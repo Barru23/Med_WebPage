@@ -91,6 +91,7 @@ export interface AdminActivityDetail {
   starts_at: string | null;
   location: string | null;
   edition: string | null;
+  max_per_order: number | null;
   published: number;
   archived: number;
   size_guide_json: string | null;
@@ -171,6 +172,7 @@ export interface SalesSummary {
     quantity: number;
     ticket_code: string;
     checked_in_at: string | null;
+    collected_at: string | null;
   }>;
 }
 
@@ -225,7 +227,8 @@ export async function getSales(
   const { results: buyers } = await db
     .prepare(
       `SELECT o.id AS order_id, o.buyer_name, o.buyer_email, o.status, o.payment_method,
-              o.created_at, v.name_ca AS variant_name, oi.quantity, oi.ticket_code, oi.checked_in_at
+              o.created_at, COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
+              oi.quantity, oi.ticket_code, oi.checked_in_at, oi.collected_at
          FROM "order" o
          JOIN order_item oi ON oi.order_id = o.id
          JOIN variant v ON v.id = oi.variant_id
@@ -261,6 +264,7 @@ export interface ExportRow {
   ticket_code: string;
   status: string;
   checked_in_at: string | null;
+  collected_at: string | null;
   created_at: string;
   field_answers_json: string | null;
 }
@@ -269,15 +273,15 @@ export async function getSalesExport(
   slug: string,
   edition?: string,
 ): Promise<{
-  activity: { title_ca: string };
+  activity: { title_ca: string; type: string };
   fields: Array<{ id: string; label_ca: string }>;
   rows: ExportRow[];
 } | null> {
   const db = await getDb();
   const activity = await db
-    .prepare(`SELECT id, title_ca, edition FROM activity WHERE slug = ?`)
+    .prepare(`SELECT id, title_ca, type, edition FROM activity WHERE slug = ?`)
     .bind(slug)
-    .first<{ id: string; title_ca: string; edition: string | null }>();
+    .first<{ id: string; title_ca: string; type: string; edition: string | null }>();
   if (!activity) return null;
 
   const { results: fields } = await db
@@ -291,9 +295,10 @@ export async function getSalesExport(
 
   const { results: rows } = await db
     .prepare(
-      `SELECT o.buyer_name, o.buyer_email, o.buyer_phone, v.name_ca AS variant_name,
-              oi.quantity, oi.ticket_code, o.status, oi.checked_in_at, o.created_at,
-              oi.field_answers_json
+      `SELECT o.buyer_name, o.buyer_email, o.buyer_phone,
+              COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
+              oi.quantity, oi.ticket_code, o.status, oi.checked_in_at, oi.collected_at,
+              o.created_at, oi.field_answers_json
          FROM order_item oi
          JOIN "order" o ON o.id = oi.order_id
          JOIN variant v ON v.id = oi.variant_id
@@ -366,5 +371,44 @@ export async function searchPickup(query: string): Promise<PickupRow[]> {
     )
     .bind(`%${query}%`)
     .all<PickupRow>();
+  return results;
+}
+
+export interface BuyerSearchRow {
+  order_item_id: string;
+  ticket_code: string;
+  buyer_name: string;
+  buyer_email: string;
+  activity_title: string;
+  variant_name: string;
+  quantity: number;
+  order_status: string;
+  checked_in_at: string | null;
+}
+
+/**
+ * Find someone's codes by name or email. This is the answer to the most common
+ * incident there is — a buyer at the door who never got the email, or deleted
+ * it — so it lives on the Door screen where that conversation happens.
+ */
+export async function searchBuyers(query: string): Promise<BuyerSearchRow[]> {
+  const db = await getDb();
+  const like = `%${query}%`;
+  const { results } = await db
+    .prepare(
+      `SELECT oi.id AS order_item_id, oi.ticket_code, o.buyer_name, o.buyer_email,
+              a.title_ca AS activity_title,
+              COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
+              oi.quantity, o.status AS order_status, oi.checked_in_at
+         FROM order_item oi
+         JOIN "order" o ON o.id = oi.order_id
+         JOIN variant v ON v.id = oi.variant_id
+         JOIN activity a ON a.id = o.activity_id
+        WHERE o.buyer_name LIKE ? OR o.buyer_email LIKE ?
+        ORDER BY o.created_at DESC
+        LIMIT 50`,
+    )
+    .bind(like, like)
+    .all<BuyerSearchRow>();
   return results;
 }

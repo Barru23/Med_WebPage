@@ -22,6 +22,13 @@ function str(v: FormDataEntryValue | null): string | null {
   return s === "" ? null : s;
 }
 
+function maxPerOrder(v: FormDataEntryValue | null): number | null {
+  const raw = str(v);
+  if (!raw) return null;
+  const n = Number.parseInt(raw, 10);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 function parseVariants(json: string): VariantDraft[] {
   try {
     const parsed = JSON.parse(json);
@@ -292,9 +299,9 @@ export async function createActivity(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
          description_ca, description_es, description_en,
-         poster_url, starts_at, location, edition, published,
+         poster_url, starts_at, location, edition, max_per_order, published,
          size_guide_json, size_guide_image_url, archived)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
     )
     .bind(
       id,
@@ -311,6 +318,7 @@ export async function createActivity(
       toDatetime(str(formData.get("starts_at")) ?? ""),
       str(formData.get("location")),
       str(formData.get("edition")),
+      maxPerOrder(formData.get("max_per_order")),
       formData.get("published") ? 1 : 0,
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
@@ -396,8 +404,8 @@ export async function updateActivity(
     .prepare(
       `UPDATE activity SET department_id=?, title_ca=?, title_es=?, title_en=?,
               description_ca=?, description_es=?, description_en=?, poster_url=?,
-              starts_at=?, location=?, edition=?, published=?, size_guide_json=?,
-              size_guide_image_url=? WHERE id=?`,
+              starts_at=?, location=?, edition=?, max_per_order=?, published=?,
+              size_guide_json=?, size_guide_image_url=? WHERE id=?`,
     )
     .bind(
       departmentId,
@@ -411,6 +419,7 @@ export async function updateActivity(
       toDatetime(str(formData.get("starts_at")) ?? ""),
       str(formData.get("location")),
       str(formData.get("edition")),
+      maxPerOrder(formData.get("max_per_order")),
       current.archived ? 0 : formData.get("published") ? 1 : 0,
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
@@ -478,6 +487,7 @@ export async function duplicateActivity(id: string): Promise<void> {
     description_en: string | null;
     poster_url: string | null;
     location: string | null;
+    max_per_order: number | null;
     size_guide_json: string | null;
     size_guide_image_url: string | null;
   }>();
@@ -495,8 +505,8 @@ export async function duplicateActivity(id: string): Promise<void> {
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
          description_ca, description_es, description_en, poster_url, location,
-         published, archived, size_guide_json, size_guide_image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+         max_per_order, published, archived, size_guide_json, size_guide_image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
     )
     .bind(
       newActivityId,
@@ -511,6 +521,7 @@ export async function duplicateActivity(id: string): Promise<void> {
       activity.description_en,
       activity.poster_url,
       activity.location,
+      activity.max_per_order,
       activity.size_guide_json,
       activity.size_guide_image_url,
     )

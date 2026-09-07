@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { aggregateByVariant } from "../src/lib/orders.ts";
+import { aggregateByVariant, totalUnits } from "../src/lib/orders.ts";
 
 test("separate lines of the same variant are summed", () => {
   // Two friends on the same trip, both "amb bus" — the case that used to crash
@@ -33,4 +33,20 @@ test("a mix of repeated and distinct variants totals correctly", () => {
 
 test("no lines means nothing wanted", () => {
   assert.equal(aggregateByVariant([]).size, 0);
+});
+
+test("totalUnits counts every unit, not every line", () => {
+  // The per-buyer cap is on units. Three lines of two is six, not three.
+  assert.equal(
+    totalUnits([
+      { variantId: "a", quantity: 2 },
+      { variantId: "b", quantity: 2 },
+      { variantId: "a", quantity: 2 },
+    ]),
+    6,
+  );
+});
+
+test("an empty order is zero units", () => {
+  assert.equal(totalUnits([]), 0);
 });

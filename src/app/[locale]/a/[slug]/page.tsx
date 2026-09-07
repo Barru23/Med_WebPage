@@ -140,11 +140,13 @@ export default async function ActivityPage({
             locale={l}
             variants={variants}
             fields={fields}
+            maxPerOrder={activity.max_per_order}
             strings={{
               addTicket: t("activity.addTicket"),
               buy: t("activity.buy"),
               buyerName: t("activity.buyerName"),
               buyerPhone: t("activity.buyerPhone"),
+              maxPerOrder: t("activity.maxPerOrder"),
               modalitats: t("activity.modalitats"),
               soldOut: t("activity.soldOut"),
               yourDetails: t("activity.yourDetails"),

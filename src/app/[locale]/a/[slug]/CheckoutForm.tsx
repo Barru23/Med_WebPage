@@ -29,6 +29,7 @@ function parseOptions(field: Field): string[] {
 
 export interface CheckoutStrings {
   addTicket: string;
+  maxPerOrder: string;
   buy: string;
   buyerName: string;
   buyerPhone: string;
@@ -42,12 +43,14 @@ export default function CheckoutForm({
   locale,
   variants,
   fields,
+  maxPerOrder,
   strings,
 }: {
   activitySlug: string;
   locale: Locale;
   variants: Variant[];
   fields: Field[];
+  maxPerOrder: number | null;
   strings: CheckoutStrings;
 }) {
   const boundAction = submitOrder.bind(null, activitySlug, locale);
@@ -81,6 +84,11 @@ export default function CheckoutForm({
         return sum + (v?.price_cents ?? 0) * qty;
       }, 0);
 
+  const unitsSoFar = hasFields
+    ? lines.length
+    : Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
+  const capReached = maxPerOrder !== null && unitsSoFar >= maxPerOrder;
+
   const linesPayload = hasFields
     ? lines.map((l) => ({ variantId: l.variantId, quantity: 1, answers: l.answers }))
     : Object.entries(quantities)
@@ -90,6 +98,12 @@ export default function CheckoutForm({
   return (
     <form action={formAction} className="flex flex-col gap-6">
       <input type="hidden" name="lines_json" value={JSON.stringify(linesPayload)} readOnly />
+
+      {maxPerOrder !== null && (
+        <p className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+          {strings.maxPerOrder.replace("{n}", String(maxPerOrder))}
+        </p>
+      )}
 
       {!hasFields && (
         <ul className="divide-y divide-sand border-y border-sand">
@@ -106,10 +120,16 @@ export default function CheckoutForm({
                 max={v.avail}
                 value={quantities[v.id] ?? 0}
                 onChange={(e) =>
-                  setQuantities((prev) => ({
-                    ...prev,
-                    [v.id]: Math.max(0, Math.min(v.avail, Number(e.target.value) || 0)),
-                  }))
+                  setQuantities((prev) => {
+                    const current = prev[v.id] ?? 0;
+                    const others = unitsSoFar - current;
+                    const room =
+                      maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
+                    return {
+                      ...prev,
+                      [v.id]: Math.max(0, Math.min(room, Number(e.target.value) || 0)),
+                    };
+                  })
                 }
                 className="admin-input w-16 text-center"
                 aria-label={pick(v, "name", locale)}
@@ -177,18 +197,20 @@ export default function CheckoutForm({
               </div>
             </div>
           ))}
-          <button
-            type="button"
-            onClick={() =>
-              setLines((prev) => [
-                ...prev,
-                { uid: `${uidBase}-${prev.length}`, variantId: buyableVariants[0].id, answers: {} },
-              ])
-            }
-            className="admin-btn self-start text-sm"
-          >
-            + {strings.addTicket}
-          </button>
+          {!capReached && (
+            <button
+              type="button"
+              onClick={() =>
+                setLines((prev) => [
+                  ...prev,
+                  { uid: `${uidBase}-${prev.length}`, variantId: buyableVariants[0].id, answers: {} },
+                ])
+              }
+              className="admin-btn self-start text-sm"
+            >
+              + {strings.addTicket}
+            </button>
+          )}
         </div>
       )}
 

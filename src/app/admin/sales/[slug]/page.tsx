@@ -25,6 +25,8 @@ export default async function SalesPage({
   const sales = await getSales(slug, edition);
   if (!sales) notFound();
 
+  const isMerch = sales.activity.type === "merch";
+
   const exportHref = `/admin/sales/${slug}/export${
     sales.currentEdition ? `?edition=${encodeURIComponent(sales.currentEdition)}` : ""
   }`;
@@ -84,7 +86,7 @@ export default async function SalesPage({
               <th className="py-2 pr-3">Modalitat</th>
               <th className="py-2 pr-3">Codi</th>
               <th className="py-2 pr-3">Estat</th>
-              <th className="py-2 pr-3">Check-in</th>
+              <th className="py-2 pr-3">{isMerch ? "Recollit" : "Check-in"}</th>
               <th className="py-2 pr-3">Data</th>
               <th className="py-2 pr-3" />
             </tr>
@@ -102,7 +104,9 @@ export default async function SalesPage({
                 </td>
                 <td className="py-2 pr-3">{b.ticket_code}</td>
                 <td className="py-2 pr-3">{STATUS_LABELS[b.status] ?? b.status}</td>
-                <td className="py-2 pr-3">{b.checked_in_at ? "✓" : "—"}</td>
+                <td className="py-2 pr-3">
+                  {(isMerch ? b.collected_at : b.checked_in_at) ? "✓" : "—"}
+                </td>
                 <td className="py-2 pr-3">{b.created_at}</td>
                 <td className="py-2 pr-3">
                   {b.status === "pending" && b.payment_method === "manual" && (

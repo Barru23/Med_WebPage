@@ -36,7 +36,8 @@
     "width": "Ancho",
     "length": "Largo",
     "close": "Cerrar",
-    "sizeGuideNote": "Medidas de la prenda en plano, en centímetros. Compáralas con una prenda que ya te quede bien."
+    "sizeGuideNote": "Medidas de la prenda en plano, en centímetros. Compáralas con una prenda que ya te quede bien.",
+    "maxPerOrder": "Máximo {n} por compra"
   },
   "type": {
     "event": "Actividad",

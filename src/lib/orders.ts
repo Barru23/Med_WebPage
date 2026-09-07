@@ -23,3 +23,8 @@ export function aggregateByVariant(lines: readonly OrderLine[]): Map<string, num
   }
   return totals;
 }
+
+/** Units across the whole order, for the per-buyer cap on an Activity. */
+export function totalUnits(lines: readonly OrderLine[]): number {
+  return lines.reduce((sum, line) => sum + line.quantity, 0);
+}

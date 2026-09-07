@@ -36,7 +36,8 @@
     "width": "Width",
     "length": "Length",
     "close": "Close",
-    "sizeGuideNote": "Flat garment measurements in centimetres. Compare them with an item that already fits you well."
+    "sizeGuideNote": "Flat garment measurements in centimetres. Compare them with an item that already fits you well.",
+    "maxPerOrder": "Maximum {n} per order"
   },
   "type": {
     "event": "Activity",

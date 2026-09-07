@@ -74,6 +74,11 @@ L'accés a `/admin` és una contrasenya compartida, guardada com a secret
 automàticament. Com que és compartida, no es pot revocar per persona: l'única
 manera de treure l'accés a algú és canviar-la per a tothom.
 
+Deu intents fallits des de la mateixa adreça IP bloquegen l'entrada durant un
+quart d'hora. És un terra, no una paret — qui vulgui insistir canvia d'IP — així
+que una regla de *rate limiting* de Cloudflare sobre `/entrar`, que és gratuïta
+i es configura al panell, continua sent recomanable.
+
 ### Comprovacions d'exposició abans d'obrir vendes
 
 - [ ] `workers_dev: false` al `wrangler.jsonc`, perquè el web no quedi també
@@ -180,11 +185,9 @@ Decisions generals:
   tornen a l'estoc automàticament. Abans no passava, i cada devolució deixava
   una plaça morta per sempre.
 
-**Encara no existeix:**
-
-- **Límit màxim d'unitats per compra.** No hi ha cap camp al model de dades. O
-  s'afegeix com a feina de desenvolupament, o s'ha de treure d'aquesta llista:
-  prometre-ho al document i no tenir-ho és pitjor que no prometre-ho.
+- **Límit màxim d'unitats per compra.** Cada activitat té un camp *Màxim per
+  compra* al formulari d'administració. Deixar-lo buit vol dir sense límit. El
+  límit es comprova al servidor, no només al formulari.
 
 ## 6. Textos legals i protecció de dades
 
@@ -222,8 +225,9 @@ No s'han de demanar DNI, al·lèrgies ni altres dades sensibles si no són neces
 - [ ] Procediment si el pagament existeix però la comanda no apareix com a pagada.
 - [ ] Procediment si Google Sheets no rep una comanda.
 - [ ] Procediment si un comprador **perd el seu codi**. Serà la incidència més
-      freqüent. Avui la resposta és: buscar-lo pel nom o el correu al panell de
-      vendes i tornar-l'hi a dir. No hi ha reenviament automàtic.
+      freqüent. La pantalla de Porta el cerca pel nom o el correu i mostra el
+      codi en gran per llegir-l'hi. Encara no hi ha reenviament automàtic per
+      correu: això arribarà amb el relay d'Apps Script.
 - [ ] Exportació periòdica de vendes acordada.
 
 **Les devolucions es fan al panell de Stripe, mai al web.** L'administradora

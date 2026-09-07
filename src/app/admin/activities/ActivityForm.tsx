@@ -141,7 +141,7 @@ export default function ActivityForm({
         </label>
       </div>
 
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
         <label className="block">
           <span className="admin-label">Data</span>
           <input
@@ -162,6 +162,17 @@ export default function ActivityForm({
             name="edition"
             placeholder="Tardor 2026"
             defaultValue={activity?.edition ?? ""}
+          />
+        </label>
+        <label className="block">
+          <span className="admin-label">Màxim per compra</span>
+          <input
+            className="admin-input"
+            name="max_per_order"
+            type="number"
+            min={1}
+            placeholder="sense límit"
+            defaultValue={activity?.max_per_order ?? ""}
           />
         </label>
         <label className="block">

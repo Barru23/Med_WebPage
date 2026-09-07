@@ -36,7 +36,8 @@
     "width": "Amplada",
     "length": "Llargada",
     "close": "Tancar",
-    "sizeGuideNote": "Mesures de la peça plana, en centímetres. Compara-les amb una peça que ja et quedi bé."
+    "sizeGuideNote": "Mesures de la peça plana, en centímetres. Compara-les amb una peça que ja et quedi bé.",
+    "maxPerOrder": "Màxim {n} per compra"
   },
   "type": {
     "event": "Activitat",

@@ -23,6 +23,9 @@ export async function GET(
   const data = await getSalesExport(slug, edition);
   if (!data) return new NextResponse("Not found", { status: 404 });
   const { activity, fields, rows } = data;
+  // Merch is collected at a table; events and trips are checked in at a door.
+  // They are different columns in the database and must not share one heading.
+  const isMerch = activity.type === "merch";
 
   const workbook = new ExcelJS.Workbook();
   const sheet = workbook.addWorksheet(activity.title_ca.slice(0, 31));
@@ -35,7 +38,9 @@ export async function GET(
     { header: "Quantitat", key: "quantity", width: 10 },
     { header: "Codi", key: "ticket_code", width: 10 },
     { header: "Estat", key: "status", width: 12 },
-    { header: "Recollit / Check-in", key: "checked_in_at", width: 18 },
+    isMerch
+      ? { header: "Recollit", key: "collected_at", width: 18 }
+      : { header: "Check-in", key: "checked_in_at", width: 18 },
     { header: "Data compra", key: "created_at", width: 18 },
     ...fields.map((f) => ({ header: f.label_ca, key: f.id, width: 18 })),
   ];
@@ -59,6 +64,7 @@ export async function GET(
       ticket_code: row.ticket_code,
       status: STATUS_LABELS[row.status] ?? row.status,
       checked_in_at: row.checked_in_at ?? "",
+      collected_at: row.collected_at ?? "",
       created_at: row.created_at,
       ...Object.fromEntries(fields.map((f) => [f.id, answers[f.id] ?? ""])),
     });

@@ -103,6 +103,7 @@ export interface ActivityPage {
     starts_at: string | null;
     location: string | null;
     edition: string | null;
+    max_per_order: number | null;
     size_guide_json: string | null;
     size_guide_image_url: string | null;
     dept_slug: string;
@@ -270,7 +271,7 @@ export async function getActivityBySlug(
       `SELECT a.id, a.slug, a.type,
               a.title_ca, a.title_es, a.title_en,
               a.description_ca, a.description_es, a.description_en,
-              a.poster_url, a.starts_at, a.location, a.edition,
+              a.poster_url, a.starts_at, a.location, a.edition, a.max_per_order,
               a.size_guide_json, a.size_guide_image_url,
               d.slug AS dept_slug,
               d.name_ca AS dept_name_ca, d.name_es AS dept_name_es, d.name_en AS dept_name_en
