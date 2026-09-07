@@ -27,13 +27,14 @@
 
   // ---- Bindings -----------------------------------------------------------
   // D1: primary database (Department, Activity, Variant, Field, Order, ...).
-  // Run `wrangler d1 create xivarri` and paste the returned id below. The
-  // placeholder is fine for local `next dev` (Wrangler uses a local SQLite).
+  // Created in WEUR — the buyers are in Girona, and D1's primary region decides
+  // how far every write travels. Wrangler's default put it in APAC.
+  // `next dev` ignores this id and uses a local SQLite file.
   "d1_databases": [
     {
       "binding": "DB",
       "database_name": "xivarri",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID",
+      "database_id": "7eabaae1-e307-4ee4-a43e-18e36d4c92e8",
       "migrations_dir": "migrations"
     }
   ],
