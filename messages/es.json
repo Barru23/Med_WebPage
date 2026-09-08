@@ -40,7 +40,10 @@
     "maxPerOrder": "Máximo {n} por compra",
     "subtotal": "Subtotal",
     "serviceFee": "Gastos de gestión",
-    "total": "Total"
+    "total": "Total",
+    "termsAccept": "Acepto las {terms} y la {privacy}.",
+    "termsLink": "condiciones de compra",
+    "privacyLink": "política de privacidad"
   },
   "type": {
     "event": "Actividad",

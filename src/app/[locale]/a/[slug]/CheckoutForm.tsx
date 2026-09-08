@@ -2,6 +2,7 @@
 
 import { useActionState, useId, useState } from "react";
 import { submitOrder, type CheckoutState } from "@/lib/actions/checkout";
+import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { serviceFeeCents } from "@/lib/fees";
 import SubmitButton from "@/components/admin/SubmitButton";
@@ -31,8 +32,11 @@ function parseOptions(field: Field): string[] {
 export interface CheckoutStrings {
   addTicket: string;
   maxPerOrder: string;
+  privacyLink: string;
   serviceFee: string;
   subtotal: string;
+  termsAccept: string;
+  termsLink: string;
   total: string;
   buy: string;
   buyerName: string;
@@ -261,6 +265,44 @@ export default function CheckoutForm({
           </div>
         </dl>
       )}
+
+      <label className="flex items-start gap-2 font-body text-sm text-ink">
+        <input
+          type="checkbox"
+          name="terms_accepted"
+          required
+          className="mt-0.5 shrink-0"
+        />
+        <span>
+          {strings.termsAccept.split(/(\{terms\}|\{privacy\})/).map((part, i) => {
+            if (part === "{terms}") {
+              return (
+                <Link
+                  key={i}
+                  href={`/${locale}/legal/condicions`}
+                  target="_blank"
+                  className="text-signal underline underline-offset-2"
+                >
+                  {strings.termsLink}
+                </Link>
+              );
+            }
+            if (part === "{privacy}") {
+              return (
+                <Link
+                  key={i}
+                  href={`/${locale}/legal/privacitat`}
+                  target="_blank"
+                  className="text-signal underline underline-offset-2"
+                >
+                  {strings.privacyLink}
+                </Link>
+              );
+            }
+            return <span key={i}>{part}</span>;
+          })}
+        </span>
+      </label>
 
       <div className="flex items-center gap-4">
         <SubmitButton className="admin-btn admin-btn-primary text-base" pendingText="Enviant…">

@@ -42,6 +42,9 @@ export async function GET(
       ? { header: "Recollit", key: "collected_at", width: 18 }
       : { header: "Check-in", key: "checked_in_at", width: 18 },
     { header: "Data compra", key: "created_at", width: 18 },
+    // La prova de l'acceptació ha de viure al document que us descarregueu,
+    // no només dins la base de dades.
+    { header: "Condicions acceptades", key: "terms_accepted_at", width: 20 },
     ...fields.map((f) => ({ header: f.label_ca, key: f.id, width: 18 })),
   ];
   sheet.getRow(1).font = { bold: true };
@@ -66,6 +69,7 @@ export async function GET(
       checked_in_at: row.checked_in_at ?? "",
       collected_at: row.collected_at ?? "",
       created_at: row.created_at,
+      terms_accepted_at: row.terms_accepted_at ?? "",
       ...Object.fromEntries(fields.map((f) => [f.id, answers[f.id] ?? ""])),
     });
   }

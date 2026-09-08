@@ -273,6 +273,7 @@ export interface ExportRow {
   checked_in_at: string | null;
   collected_at: string | null;
   created_at: string;
+  terms_accepted_at: string | null;
   field_answers_json: string | null;
 }
 
@@ -305,7 +306,7 @@ export async function getSalesExport(
       `SELECT o.buyer_name, o.buyer_email, o.buyer_phone,
               COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name,
               oi.quantity, oi.ticket_code, o.status, oi.checked_in_at, oi.collected_at,
-              o.created_at, oi.field_answers_json
+              o.created_at, o.terms_accepted_at, oi.field_answers_json
          FROM order_item oi
          JOIN "order" o ON o.id = oi.order_id
          JOIN variant v ON v.id = oi.variant_id

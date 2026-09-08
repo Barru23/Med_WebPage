@@ -40,7 +40,10 @@
     "maxPerOrder": "Maximum {n} per order",
     "subtotal": "Subtotal",
     "serviceFee": "Booking fee",
-    "total": "Total"
+    "total": "Total",
+    "termsAccept": "I accept the {terms} and the {privacy}.",
+    "termsLink": "terms of sale",
+    "privacyLink": "privacy policy"
   },
   "type": {
     "event": "Activity",

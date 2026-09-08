@@ -33,6 +33,10 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   const buyerName = str(formData.get("buyer_name")); const buyerEmail = str(formData.get("buyer_email")); const buyerPhone = str(formData.get("buyer_phone"));
   const lines = parseLines(String(formData.get("lines_json") ?? "[]")).filter((l) => Number.isInteger(l.quantity) && l.quantity > 0);
   if (!buyerName || !buyerEmail) return { error: "El nom i l'email són obligatoris." }; if (!EMAIL_RE.test(buyerEmail)) return { error: "L'email no és vàlid." }; if (!lines.length) return { error: "Selecciona almenys una modalitat." };
+  // La casella del formulari es pot saltar; això no. Sense acceptació no hi ha
+  // comanda, i queda registrat quan es va donar (requisits-produccio.md §6).
+  if (!formData.get("terms_accepted")) return { error: "Has d'acceptar les condicions de compra i la política de privacitat." };
+  const termsAcceptedAt = utcNow();
   const db = await getDb(); const activity = await db.prepare(`SELECT id, edition, max_per_order, catalog_revision FROM activity WHERE slug = ? AND published = 1 AND archived = 0`).bind(activitySlug).first<{ id: string; edition: string | null; max_per_order: number | null; catalog_revision: number }>(); if (!activity) return { error: "Aquesta activitat no està disponible." };
   // The cap is enforced here, not only in the form: the line payload is a
   // hidden field and anyone can edit it before posting.
@@ -66,7 +70,7 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   // Una comanda de 0 EUR no passa per la passarel·la i no en paga.
   const feeCents = serviceFeeCents(total); const charged = total + feeCents;
   const orderId = newId("ord"); const paidNow = charged === 0; const codes = await Promise.all(resolved.map(() => uniqueTicketCode(db))); const expiresAt = utcNow(HOLD_MS);
-  const statements = [db.prepare(`INSERT INTO "order" (id, activity_id, edition, buyer_name, buyer_email, buyer_phone, total_cents, fee_cents, currency, status, payment_method, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, ?, datetime('now'), ?)`).bind(orderId, activity.id, activity.edition, buyerName, buyerEmail, buyerPhone, charged, feeCents, paidNow ? "paid" : "pending", paidNow ? "manual" : "stripe", paidNow ? utcNow() : null)];
+  const statements = [db.prepare(`INSERT INTO "order" (id, activity_id, edition, buyer_name, buyer_email, buyer_phone, total_cents, fee_cents, currency, status, payment_method, terms_accepted_at, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, ?, ?, datetime('now'), ?)`).bind(orderId, activity.id, activity.edition, buyerName, buyerEmail, buyerPhone, charged, feeCents, paidNow ? "paid" : "pending", paidNow ? "manual" : "stripe", termsAcceptedAt, paidNow ? utcNow() : null)];
   resolved.forEach((line, i) => statements.push(db.prepare(`INSERT INTO order_item (id, order_id, variant_id, quantity, field_answers_json, ticket_code, variant_name_snapshot, unit_price_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(newId("oi"), orderId, line.variantId, line.quantity, Object.keys(line.answers).length ? JSON.stringify(line.answers) : null, codes[i], line.variantName, line.priceCents)));
   for (const [variantId, quantity] of wanted) {
     if (paidNow) statements.push(db.prepare(`UPDATE variant SET sold = sold + ? WHERE id = ?`).bind(quantity, variantId));
