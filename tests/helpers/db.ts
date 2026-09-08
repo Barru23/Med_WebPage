@@ -1,6 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { ON_SALE_EXPR } from "../../src/lib/availability.ts";
 
 const MIGRATIONS = join(import.meta.dirname, "..", "..", "migrations");
 
@@ -31,11 +32,18 @@ export function seedActivity(
   ).run(variantId, price, stock);
 }
 
-/** The reservation insert from src/lib/actions/checkout.ts, verbatim. */
+/**
+ * The reservation insert from src/lib/actions/checkout.ts.
+ *
+ * The sale-window and active checks are IMPORTED rather than copied, so the
+ * test cannot quietly drift from the query it claims to be testing. The rest
+ * is the statement as checkout.ts builds it.
+ */
 export const RESERVE_SQL = `INSERT INTO stock_reservation (id, order_id, variant_id, quantity, expires_at)
   SELECT ?, ?, v.id, ?, ?
     FROM variant v
    WHERE v.id = ?
+     AND ${ON_SALE_EXPR}
      AND v.stock - v.sold - (
        SELECT COALESCE(SUM(sr.quantity), 0) FROM stock_reservation sr
         WHERE sr.variant_id = v.id AND sr.consumed_at IS NULL

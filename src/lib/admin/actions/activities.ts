@@ -7,8 +7,9 @@ import { getDb } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { slugify } from "@/lib/slug";
 import { saveMedia } from "@/lib/storage";
+import { getStripe } from "@/lib/stripe";
 import { wallTimeToUtc } from "@/lib/time";
-import { eurosToCents } from "@/lib/admin/activityForm";
+import { eurosToCents } from "@/lib/admin/money";
 import type { VariantDraft, FieldDraft } from "@/lib/admin/activityForm";
 import type {
   ActivityImageDraft,
@@ -118,53 +119,94 @@ function toDatetime(v: string): string | null {
   return wallTimeToUtc(v);
 }
 
-async function replaceVariantsAndFields(
+type StatementPlan =
+  | { statements: D1PreparedStatement[] }
+  | { error: string };
+
+type CatalogPlan =
+  | {
+      statements: D1PreparedStatement[];
+      /**
+       * Whether this edit changes something a Checkout Session already holds a
+       * snapshot of — a price, or a modality disappearing. Fixing a typo in the
+       * description is not worth throwing every buyer out of Stripe for.
+       */
+      affectsOpenCheckouts: boolean;
+    }
+  | { error: string };
+
+async function prepareVariantsAndFields(
   db: D1Database,
   activityId: string,
   variants: VariantDraft[],
   fields: FieldDraft[],
-): Promise<string | null> {
+): Promise<CatalogPlan> {
   const validVariants = variants.filter((v) => v.name_ca.trim() !== "");
   if (validVariants.length === 0) {
-    return "Cal almenys una modalitat (variant).";
+    return { error: "Cal almenys una modalitat (variant)." };
   }
 
-  const { results: existingVariants } = await db
-    .prepare(`SELECT id, sold FROM variant WHERE activity_id = ?`)
-    .bind(activityId)
-    .all<{ id: string; sold: number }>();
+  const pricedVariants: Array<{ draft: VariantDraft; priceCents: number }> = [];
+  for (const variant of validVariants) {
+    const priceCents = eurosToCents(variant.price_euros);
+    if (priceCents === null) {
+      return {
+        error: `El preu de «${variant.name_ca}» no és vàlid. Escriu, per exemple, 12,50.`,
+      };
+    }
+    pricedVariants.push({ draft: variant, priceCents });
+  }
+
+  const [{ results: existingVariants }, { results: existingFields }] = await Promise.all([
+    db
+      .prepare(`SELECT id, price_cents FROM variant WHERE activity_id = ? AND active = 1`)
+      .bind(activityId)
+      .all<{ id: string; price_cents: number }>(),
+    db
+      .prepare(`SELECT id FROM field WHERE activity_id = ?`)
+      .bind(activityId)
+      .all<{ id: string }>(),
+  ]);
+
+  const existingVariantIds = new Set(existingVariants.map((variant) => variant.id));
+  const unknownVariant = validVariants.find(
+    (variant) => variant.id && !existingVariantIds.has(variant.id),
+  );
+  if (unknownVariant) return { error: "Una modalitat ja no pertany a aquesta activitat." };
+
+  const existingFieldIds = new Set(existingFields.map((field) => field.id));
+  const unknownField = fields.find((field) => field.id && !existingFieldIds.has(field.id));
+  if (unknownField) return { error: "Una pregunta ja no pertany a aquesta activitat." };
+
   const keptIds = new Set(validVariants.filter((v) => v.id).map((v) => v.id));
   const removed = existingVariants.filter((v) => !keptIds.has(v.id));
-  const blockedRemoval = removed.find((v) => v.sold > 0);
-  if (blockedRemoval) {
-    return "No es pot eliminar una modalitat que ja té vendes.";
-  }
-
-  const { results: existingFields } = await db
-    .prepare(`SELECT id FROM field WHERE activity_id = ?`)
-    .bind(activityId)
-    .all<{ id: string }>();
   const keptFieldIds = new Set(fields.filter((f) => f.id).map((f) => f.id));
   const removedFields = existingFields.filter((f) => !keptFieldIds.has(f.id));
 
-  const statements = [];
+  const statements: D1PreparedStatement[] = [];
 
   for (const v of removed) {
-    statements.push(db.prepare(`DELETE FROM variant WHERE id = ?`).bind(v.id));
+    // Preserve historical orders while making the variant unavailable to all
+    // new buyers. Physical deletion would violate order_item's foreign key.
+    statements.push(
+      db
+        .prepare(`UPDATE variant SET active = 0 WHERE id = ? AND activity_id = ?`)
+        .bind(v.id, activityId),
+    );
   }
   for (const f of removedFields) {
     statements.push(db.prepare(`DELETE FROM field WHERE id = ?`).bind(f.id));
   }
 
-  validVariants.forEach((v, position) => {
-    const priceCents = eurosToCents(v.price_euros);
+  pricedVariants.forEach(({ draft: v, priceCents }, position) => {
     const stock = Math.max(0, Number.parseInt(v.stock, 10) || 0);
     if (v.id) {
       statements.push(
         db
           .prepare(
             `UPDATE variant SET name_ca=?, name_es=?, name_en=?, price_cents=?, stock=?,
-                    sale_start=?, sale_end=?, position=? WHERE id=?`,
+                    sale_start=?, sale_end=?, position=?, active=1
+              WHERE id=? AND activity_id=?`,
           )
           .bind(
             v.name_ca,
@@ -176,6 +218,7 @@ async function replaceVariantsAndFields(
             toDatetime(v.sale_end),
             position,
             v.id,
+            activityId,
           ),
       );
     } else {
@@ -215,7 +258,8 @@ async function replaceVariantsAndFields(
       statements.push(
         db
           .prepare(
-            `UPDATE field SET label_ca=?, label_es=?, label_en=?, type=?, options_json=?, required=?, position=? WHERE id=?`,
+            `UPDATE field SET label_ca=?, label_es=?, label_en=?, type=?, options_json=?, required=?, position=?
+              WHERE id=? AND activity_id=?`,
           )
           .bind(
             f.label_ca,
@@ -226,6 +270,7 @@ async function replaceVariantsAndFields(
             f.required ? 1 : 0,
             position,
             f.id,
+            activityId,
           ),
       );
     } else {
@@ -250,8 +295,100 @@ async function replaceVariantsAndFields(
     }
   });
 
-  if (statements.length > 0) await db.batch(statements);
-  return null;
+  // A session's line items carry the price the buyer agreed to. Only a price
+  // that moved, or a modality that went away, can make that snapshot wrong.
+  const priceOf = new Map(existingVariants.map((v) => [v.id, v.price_cents]));
+  const affectsOpenCheckouts =
+    removed.length > 0 ||
+    pricedVariants.some(
+      ({ draft, priceCents }) => draft.id && priceOf.get(draft.id) !== priceCents,
+    );
+
+  return { statements, affectsOpenCheckouts };
+}
+
+/**
+ * A Stripe Checkout Session contains a snapshot of its line items. Expire all
+ * open sessions before an edit so an old price cannot be paid afterwards.
+ */
+async function preparePendingCheckoutCancellation(
+  db: D1Database,
+  activityId: string,
+): Promise<StatementPlan> {
+  const { results: pending } = await db
+    .prepare(
+      `SELECT id, stripe_session_id
+         FROM "order"
+        WHERE activity_id = ? AND status = 'pending' AND stripe_session_id IS NOT NULL`,
+    )
+    .bind(activityId)
+    .all<{ id: string; stripe_session_id: string }>();
+  if (pending.length === 0) return { statements: [] };
+
+  let stripe;
+  try {
+    stripe = await getStripe();
+  } catch (error) {
+    console.error("[admin] Could not initialise Stripe while updating activity", {
+      activityId,
+      message: error instanceof Error ? error.message : String(error),
+    });
+    return { error: "No s'han pogut tancar les compres obertes. Torna-ho a provar." };
+  }
+
+  const expiredOrders: typeof pending = [];
+  for (const order of pending) {
+    let status: string | null;
+    try {
+      const session = await stripe.checkout.sessions.retrieve(order.stripe_session_id);
+      status = session.status;
+      if (status === "open") {
+        try {
+          await stripe.checkout.sessions.expire(order.stripe_session_id);
+          status = "expired";
+        } catch {
+          // The buyer may complete payment between retrieve and expire.
+          status = (await stripe.checkout.sessions.retrieve(order.stripe_session_id)).status;
+        }
+      }
+    } catch (error) {
+      console.error("[admin] Could not expire Stripe Checkout", {
+        activityId,
+        orderId: order.id,
+        sessionId: order.stripe_session_id,
+        message: error instanceof Error ? error.message : String(error),
+      });
+      return { error: "No s'han pogut tancar les compres obertes. Torna-ho a provar." };
+    }
+
+    // A completed session is already a committed payment attempt (Bizum may
+    // still be asynchronous). Keep its immutable order snapshot and let the
+    // webhook finish it; only sessions that were still open are invalidated.
+    if (status === "complete") continue;
+    if (status !== "expired") {
+      return { error: "No s'ha pogut comprovar una compra oberta. Torna-ho a provar." };
+    }
+    expiredOrders.push(order);
+  }
+
+  const statements: D1PreparedStatement[] = [];
+  for (const order of expiredOrders) {
+    statements.push(
+      db
+        .prepare(
+          `UPDATE "order" SET status = 'cancelled'
+            WHERE id = ? AND stripe_session_id = ? AND status = 'pending'`,
+        )
+        .bind(order.id, order.stripe_session_id),
+      db
+        .prepare(
+          `UPDATE stock_reservation SET expires_at = datetime('now')
+            WHERE order_id = ? AND consumed_at IS NULL`,
+        )
+        .bind(order.id),
+    );
+  }
+  return { statements };
 }
 
 export async function createActivity(
@@ -272,10 +409,11 @@ export async function createActivity(
   if (sizeGuide.error) return { error: sizeGuide.error };
   const galleryFiles = imageFiles(formData, "gallery");
   const guideFiles = imageFiles(formData, "size_guide_image");
+  const posterFiles = imageFiles(formData, "poster");
   const mediaError = validateImages([
     ...galleryFiles,
     ...guideFiles,
-    ...imageFiles(formData, "poster"),
+    ...posterFiles,
   ]);
   if (mediaError) return { error: mediaError };
 
@@ -286,15 +424,23 @@ export async function createActivity(
     slug = `${baseSlug}-${i}`;
   }
 
-  const poster = formData.get("poster");
-  const posterUrl =
-    poster instanceof File && poster.size > 0 ? await saveMedia("activities", poster) : null;
+  const id = newId("act");
+  const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
+  const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
+  const catalog = await prepareVariantsAndFields(db, id, variants, fields);
+  if ("error" in catalog) return { error: catalog.error };
+
+  const posterUrl = posterFiles[0]
+    ? await saveMedia("activities", posterFiles[0])
+    : null;
   const sizeGuideImageUrl = type === "merch" && guideFiles[0]
     ? await saveMedia("size-guides", guideFiles[0])
     : null;
+  const uploadedGallery = await Promise.all(
+    galleryFiles.map((file) => saveMedia("activity-galleries", file)),
+  );
 
-  const id = newId("act");
-  await db
+  const activityStatement = db
     .prepare(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
@@ -322,34 +468,19 @@ export async function createActivity(
       formData.get("published") ? 1 : 0,
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
-    )
-    .run();
-
-  if (galleryFiles.length) {
-    await db.batch(
-      await Promise.all(
-        galleryFiles.map(async (file, position) =>
-          db
-            .prepare(
-              `INSERT INTO activity_image (id, activity_id, image_url, alt_ca, position)
-               VALUES (?, ?, ?, ?, ?)`,
-            )
-            .bind(
-              newId("img"),
-              id,
-              await saveMedia("activity-galleries", file),
-              titleCa,
-              position,
-            ),
-        ),
-      ),
     );
-  }
+  const galleryStatements = uploadedGallery.map((imageUrl, position) =>
+    db
+      .prepare(
+        `INSERT INTO activity_image (id, activity_id, image_url, alt_ca, position)
+         VALUES (?, ?, ?, ?, ?)`,
+      )
+      .bind(newId("img"), id, imageUrl, titleCa, position),
+  );
 
-  const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
-  const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
-  const error = await replaceVariantsAndFields(db, id, variants, fields);
-  if (error) return { error };
+  // D1 batches are transactional: either the activity and all its editable
+  // children are created, or none of them are.
+  await db.batch([activityStatement, ...catalog.statements, ...galleryStatements]);
 
   revalidatePath("/admin/activities");
   redirect(`/admin/activities/${id}`);
@@ -388,8 +519,21 @@ export async function updateActivity(
       poster_url: string | null;
       size_guide_image_url: string | null;
       archived: number;
-    }>();
+  }>();
   if (!current) return { error: "L'activitat no existeix." };
+
+  const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
+  const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
+  const catalog = await prepareVariantsAndFields(db, id, variants, fields);
+  if ("error" in catalog) return { error: catalog.error };
+
+  // Only reach for Stripe when the edit could invalidate a session in flight.
+  // Otherwise an admin fixing a description would throw everyone mid-payment
+  // out of checkout, and a Stripe outage would block edits that cannot hurt.
+  const checkoutCancellation = catalog.affectsOpenCheckouts
+    ? await preparePendingCheckoutCancellation(db, id)
+    : { statements: [] as D1PreparedStatement[] };
+  if ("error" in checkoutCancellation) return { error: checkoutCancellation.error };
 
   const posterUrl = posterFiles[0]
     ? await saveMedia("activities", posterFiles[0])
@@ -400,12 +544,13 @@ export async function updateActivity(
     sizeGuideImageUrl = await saveMedia("size-guides", guideFiles[0]);
   }
 
-  await db
+  const activityStatement = db
     .prepare(
       `UPDATE activity SET department_id=?, title_ca=?, title_es=?, title_en=?,
               description_ca=?, description_es=?, description_en=?, poster_url=?,
               starts_at=?, location=?, edition=?, max_per_order=?, published=?,
-              size_guide_json=?, size_guide_image_url=? WHERE id=?`,
+              size_guide_json=?, size_guide_image_url=?,
+              catalog_revision=catalog_revision+1 WHERE id=?`,
     )
     .bind(
       departmentId,
@@ -424,8 +569,7 @@ export async function updateActivity(
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
       id,
-    )
-    .run();
+    );
 
   const retainedImages = parseImages(String(formData.get("gallery_json") ?? "[]"));
   const { results: storedImages } = await db
@@ -458,12 +602,14 @@ export async function updateActivity(
         .bind(newId("img"), id, imageUrl, titleCa, validRetained.length + index),
     );
   });
-  if (imageStatements.length) await db.batch(imageStatements);
-
-  const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
-  const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
-  const error = await replaceVariantsAndFields(db, id, variants, fields);
-  if (error) return { error };
+  // One transaction prevents an error in a child row from leaving the main
+  // activity, its gallery and its catalogue at different versions.
+  await db.batch([
+    ...checkoutCancellation.statements,
+    activityStatement,
+    ...imageStatements,
+    ...catalog.statements,
+  ]);
 
   revalidatePath("/admin/activities");
   revalidatePath(`/admin/activities/${id}`);
@@ -500,7 +646,7 @@ export async function duplicateActivity(id: string): Promise<void> {
   }
 
   const newActivityId = newId("act");
-  await db
+  const activityStatement = db
     .prepare(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
@@ -524,11 +670,10 @@ export async function duplicateActivity(id: string): Promise<void> {
       activity.max_per_order,
       activity.size_guide_json,
       activity.size_guide_image_url,
-    )
-    .run();
+    );
 
   const { results: variants } = await db
-    .prepare(`SELECT name_ca, name_es, name_en, price_cents, position FROM variant WHERE activity_id=?`)
+    .prepare(`SELECT name_ca, name_es, name_en, price_cents, position FROM variant WHERE activity_id=? AND active=1`)
     .bind(id)
     .all<{ name_ca: string; name_es: string | null; name_en: string | null; price_cents: number; position: number }>();
   const { results: fields } = await db
@@ -595,7 +740,7 @@ export async function duplicateActivity(id: string): Promise<void> {
         ),
     ),
   ];
-  if (statements.length > 0) await db.batch(statements);
+  await db.batch([activityStatement, ...statements]);
 
   revalidatePath("/admin/activities");
   redirect(`/admin/activities/${newActivityId}`);
@@ -607,14 +752,22 @@ export async function setActivityArchived(
 ): Promise<void> {
   await requireAdmin();
   const db = await getDb();
-  await db
-    .prepare(
-      `UPDATE activity
-          SET archived = ?, published = CASE WHEN ? = 1 THEN 0 ELSE published END
-        WHERE id = ?`,
-    )
-    .bind(archived ? 1 : 0, archived ? 1 : 0, id)
-    .run();
+  const checkoutCancellation = archived
+    ? await preparePendingCheckoutCancellation(db, id)
+    : { statements: [] as D1PreparedStatement[] };
+  if ("error" in checkoutCancellation) throw new Error(checkoutCancellation.error);
+
+  await db.batch([
+    ...checkoutCancellation.statements,
+    db
+      .prepare(
+        `UPDATE activity
+            SET archived = ?, published = CASE WHEN ? = 1 THEN 0 ELSE published END,
+                catalog_revision = catalog_revision + 1
+          WHERE id = ?`,
+      )
+      .bind(archived ? 1 : 0, archived ? 1 : 0, id),
+  ]);
 
   revalidatePath("/admin/activities");
   revalidatePath(`/admin/activities/${id}`);

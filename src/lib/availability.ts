@@ -20,3 +20,15 @@ export const HELD_BY_STRIPE = `(
 
 /** SQL expression for a variant's true remaining count. Requires alias `v`. */
 export const AVAIL_EXPR = `MAX(v.stock - v.sold - ${HELD_BY_STRIPE}, 0)`;
+
+/** Whether a variant may be bought at this instant. Requires alias `v`. */
+export const ON_SALE_EXPR = `(
+  v.active = 1
+  AND (v.sale_start IS NULL OR v.sale_start <= datetime('now'))
+  AND (v.sale_end IS NULL OR v.sale_end >= datetime('now'))
+)`;
+
+/** Available units, with inactive variants and sale windows enforced. */
+export const BUYABLE_AVAIL_EXPR = `(
+  CASE WHEN ${ON_SALE_EXPR} THEN ${AVAIL_EXPR} ELSE 0 END
+)`;

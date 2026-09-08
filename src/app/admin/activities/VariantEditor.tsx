@@ -50,8 +50,11 @@ export default function VariantEditor({
             <input
               className="admin-input"
               inputMode="decimal"
+              pattern="[0-9]+([,.][0-9]{1,2})?"
+              title="Escriu un import com 12,50"
               value={v.price_euros}
               onChange={(e) => update(i, { price_euros: e.target.value })}
+              required
             />
           </label>
           <label className="block sm:col-span-1">

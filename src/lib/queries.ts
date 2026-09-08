@@ -1,12 +1,15 @@
 import { getDb } from "@/lib/db";
-import { HELD_BY_STRIPE, AVAIL_EXPR } from "@/lib/availability";
+import {
+  BUYABLE_AVAIL_EXPR,
+  HELD_BY_STRIPE,
+  ON_SALE_EXPR,
+} from "@/lib/availability";
 
 // A variant is "available" when it is inside its sale window and has stock
 // left once open Stripe holds are accounted for. Repeated in a few queries;
 // kept as one SQL fragment for consistency.
 const AVAILABLE = `
-  (v.sale_start IS NULL OR v.sale_start <= datetime('now'))
-  AND (v.sale_end   IS NULL OR v.sale_end   >= datetime('now'))
+  ${ON_SALE_EXPR}
   AND (v.stock - v.sold - ${HELD_BY_STRIPE}) > 0
 `;
 
@@ -166,8 +169,8 @@ export async function getDepartmentBySlug(
     .prepare(
       `SELECT a.id, a.slug, a.type, a.title_ca, a.title_es, a.title_en,
               a.starts_at, a.location,
-              MIN(v.price_cents) AS min_price,
-              COALESCE(SUM(${AVAIL_EXPR}), 0) AS avail
+              MIN(CASE WHEN ${ON_SALE_EXPR} THEN v.price_cents END) AS min_price,
+              COALESCE(SUM(${BUYABLE_AVAIL_EXPR}), 0) AS avail
          FROM activity a LEFT JOIN variant v ON v.activity_id = a.id
         WHERE a.department_id = ? AND a.published = 1 AND a.archived = 0
         GROUP BY a.id
@@ -287,8 +290,8 @@ export async function getActivityBySlug(
       db
         .prepare(
           `SELECT v.id, v.name_ca, v.name_es, v.name_en, v.price_cents,
-                  ${AVAIL_EXPR} AS avail
-             FROM variant v WHERE v.activity_id = ?
+                  ${BUYABLE_AVAIL_EXPR} AS avail
+             FROM variant v WHERE v.activity_id = ? AND v.active = 1
             ORDER BY v.position, v.name_ca`,
         )
         .bind(activity.id)

@@ -127,7 +127,7 @@ export async function getAdminActivity(id: string): Promise<{
       .prepare(
         `SELECT id, name_ca, name_es, name_en, price_cents, stock, sold,
                 sale_start, sale_end, position
-           FROM variant WHERE activity_id = ? ORDER BY position`,
+           FROM variant WHERE activity_id = ? AND active = 1 ORDER BY position`,
       )
       .bind(id)
       .all<AdminVariant>(),
@@ -220,7 +220,7 @@ export async function getSales(
   const remainingRow = await db
     .prepare(
       `SELECT COALESCE(SUM(${AVAIL_EXPR}), 0) AS remaining
-         FROM variant v WHERE v.activity_id = ?`,
+         FROM variant v WHERE v.activity_id = ? AND v.active = 1`,
     )
     .bind(activity.id)
     .first<{ remaining: number }>();

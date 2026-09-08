@@ -66,14 +66,6 @@ export function emptyField(): FieldDraft {
   };
 }
 
-/** "12,50" or "12.50" -> 1250 cents. Empty/invalid -> 0. */
-export function eurosToCents(input: string): number {
-  const normalized = input.replace(",", ".").trim();
-  const value = Number.parseFloat(normalized);
-  if (!Number.isFinite(value) || value < 0) return 0;
-  return Math.round(value * 100);
-}
-
 export function centsToEuros(cents: number): string {
   return (cents / 100).toFixed(2);
 }
