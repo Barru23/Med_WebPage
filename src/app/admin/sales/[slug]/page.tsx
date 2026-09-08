@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSales } from "@/lib/admin/queries";
 import { formatPrice } from "@/lib/format";
+import { LIVE_SHEET_URL, sheetTabName } from "@/lib/sheet";
 import MarkPaidButton from "./MarkPaidButton";
 import ResyncButton from "./ResyncButton";
 import { requireAdminPage } from "@/lib/auth";
@@ -33,6 +34,10 @@ export default async function SalesPage({
   const exportHref = `/admin/sales/${slug}/export${
     sales.currentEdition ? `?edition=${encodeURIComponent(sales.currentEdition)}` : ""
   }`;
+
+  // The tab the relay writes this activity's orders to. Naming it saves the
+  // admin from scrolling a sheet with one tab per activity and edition.
+  const tabName = sheetTabName(sales.activity.title_ca, sales.currentEdition);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -76,10 +81,22 @@ export default async function SalesPage({
         <a href={exportHref} className="admin-btn admin-btn-primary">
           Descarregar Excel
         </a>
-        <button type="button" disabled className="admin-btn" title="Disponible properament">
-          Full de Google en directe (properament)
-        </button>
+        <a
+          href={LIVE_SHEET_URL}
+          target="_blank"
+          rel="noreferrer"
+          className="admin-btn"
+          title={`Obre el full compartit. La pestanya d’aquesta activitat es diu «${tabName}».`}
+        >
+          Full de Google en directe
+        </a>
       </div>
+
+      <p className="mt-2 font-mono text-xs text-ink/50">
+        L’Excel es genera de la base de dades cada vegada que el prems. El full de Google és una
+        còpia que s’actualitza a cada comanda pagada, còmode per compartir, i pot quedar enrere
+        si la sincronització falla.
+      </p>
 
       <div className="mt-8 overflow-x-auto">
         <table className="w-full min-w-[640px] border-collapse font-mono text-xs">

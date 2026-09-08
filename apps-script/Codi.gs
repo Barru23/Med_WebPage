@@ -106,6 +106,32 @@ function obtenirPestanya(dades) {
 }
 
 /**
+ * Una pestanya nova neix amb 26 columnes i 1.000 files. Una activitat amb
+ * moltes preguntes, o una que vengui molt, se'n surt — i Sheets no eixampla la
+ * graella sol: la crida peta amb "out of bounds" i la comanda es queda sense
+ * fila. S'hi fa lloc abans d'escriure.
+ */
+function ferLloc(full, columnes, files) {
+  var columnesDeMes = columnes - full.getMaxColumns();
+  if (columnesDeMes > 0) full.insertColumnsAfter(full.getMaxColumns(), columnesDeMes);
+
+  var filesDeMes = full.getLastRow() + files - full.getMaxRows();
+  if (filesDeMes > 0) full.insertRowsAfter(full.getMaxRows(), filesDeMes);
+}
+
+/**
+ * Sheets avalua com a fórmula qualsevol text que comenci per = + - @, i el nom
+ * del comprador i les respostes del formulari els escriu ell. Un nom com
+ * "=IMPORTXML(...)" s'executaria sol el dia que una organitzadora obrís el
+ * full, amb els DNI i les al·lèrgies a la mateixa pestanya. Un apòstrof al
+ * davant ho deixa en text: es veu igual i no s'avalua.
+ */
+function textSegur(valor) {
+  if (typeof valor !== 'string') return valor;
+  return /^[=+@-]/.test(valor) ? "'" + valor : valor;
+}
+
+/**
  * Capçaleres de la pestanya, ampliant-les si cal.
  *
  * Es llegeix el que ja hi ha i s'hi afegeix el que falti, en comptes de donar
@@ -117,6 +143,7 @@ function capcaleres(full, dades) {
   var volem = COLUMNES_INICI.concat(dades.field_labels || []).concat(COLUMNES_FINAL);
 
   if (full.getLastRow() === 0) {
+    ferLloc(full, volem.length, 1);
     full.appendRow(volem);
     full.setFrozenRows(1);
     full.getRange(1, 1, 1, volem.length).setFontWeight('bold');
@@ -129,6 +156,7 @@ function capcaleres(full, dades) {
     return actuals.indexOf(c) === -1;
   });
   if (falten.length) {
+    ferLloc(full, actuals.length + falten.length, 0);
     full
       .getRange(1, actuals.length + 1, 1, falten.length)
       .setValues([falten])
@@ -165,12 +193,13 @@ function escriureFiles(full, dades) {
     // Els valors es col·loquen segons les capçaleres REALS de la pestanya, no
     // segons un ordre suposat.
     return columnes.map(function (c) {
-      return valors[c] === undefined ? '' : valors[c];
+      return valors[c] === undefined ? '' : textSegur(valors[c]);
     });
   });
 
   if (!files.length) return;
 
+  ferLloc(full, columnes.length, files.length);
   full.getRange(full.getLastRow() + 1, 1, files.length, columnes.length).setValues(files);
   SpreadsheetApp.flush();
 }

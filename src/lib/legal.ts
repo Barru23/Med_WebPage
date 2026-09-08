@@ -1,10 +1,11 @@
 /**
  * Textos legals del web.
  *
- * ⚠️ ELS MARCADORS EN MAJÚSCULES ENTRE CLAUDÀTORS S'HAN D'OMPLIR abans
- * d'obrir vendes de veritat. Són dades que viuen fora del repositori: qui és
- * la titular, on viu, com se la contacta. Cap fitxer del projecte ha de donar
- * per fet un nom concret (CLAUDE.md §9).
+ * ⚠️ QUI VEN ÉS EL COL·LECTIU, NO CAP PERSONA CONCRETA. Per decisió de
+ * l'organització aquestes pàgines no publiquen cap nom particular, ni DNI, ni
+ * adreça, ni telèfon: el correu compartit de la promoció és l'únic canal de
+ * contacte. Cap fitxer del projecte ha de donar per fet un nom concret
+ * (CLAUDE.md §9).
  *
  * ⚠️ AQUESTS TEXTOS ELS HA DE REVISAR ALGÚ QUE HI ENTENGUI abans del
  * llançament. Són un esborrany honest i complet del que normalment demana una
@@ -36,12 +37,21 @@ export const LEGAL_NAV: Array<{ slug: string; label: string }> = [
   { slug: "cookies", label: "Cookies" },
 ];
 
-const TITULAR = "[NOM I COGNOMS DE LA PERSONA TITULAR]";
-const DNI = "[DNI/NIE]";
-const ADRECA = "[ADREÇA POSTAL COMPLETA]";
-const CORREU = "[CORREU DE CONTACTE]";
-const TELEFON = "[TELÈFON DE CONTACTE]";
-const DIES_CONSERVACIO = "[NOMBRE DE MESOS]";
+const TITULAR = "els estudiants de la 14a promoció de Medicina de la Universitat de Girona";
+const CORREU = "promocio14medicinaudg@gmail.com";
+
+/**
+ * Mesos que es conserven les dades d'un participant després de l'activitat.
+ *
+ * Dotze: cobreix la temporada sencera d'una activitat que es reobre cada any i
+ * el termini en què encara pot aparèixer una reclamació o una devolució, sense
+ * arrossegar llistats de fa anys. El DNI i les dades de salut no esperen tant
+ * — s'esborren en acabar l'activitat — i el registre comptable de les vendes
+ * viu a Stripe amb els seus propis terminis.
+ *
+ * No hi ha cap procés que ho faci sol: és una neteja que algú ha de fer.
+ */
+const MESOS_CONSERVACIO = "12";
 
 export const LEGAL_DOCS: LegalDoc[] = [
   {
@@ -53,9 +63,10 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Qui ven",
         body: [
-          `Titular i venedora: ${TITULAR}, amb DNI/NIE ${DNI} i domicili a ${ADRECA}.`,
-          `Contacte: ${CORREU} · ${TELEFON}.`,
-          "XIVARRI és el nom amb què es coneix la promoció. No és una entitat amb personalitat jurídica pròpia: qui ven, factura i respon és la persona indicada més amunt.",
+          `Titular del web i responsables de la venda: ${TITULAR}.`,
+          `Contacte: ${CORREU}.`,
+          "XIVARRI és el nom amb què es coneix la promoció. No és cap empresa ni una entitat amb personalitat jurídica pròpia, i no té ànim de lucre: les activitats les organitzen els mateixos estudiants i el que es recapta serveix per pagar-les.",
+          `Qualsevol qüestió sobre una compra, una activitat o aquestes pàgines es resol escrivint a ${CORREU}, que és el canal de contacte de la promoció.`,
           "Aquest web no està vinculat oficialment a la Universitat de Girona ni la representa.",
         ],
       },
@@ -96,8 +107,8 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Qui tracta les vostres dades",
         body: [
-          `Responsable: ${TITULAR}, DNI/NIE ${DNI}, ${ADRECA}.`,
-          `Per a qualsevol qüestió sobre les vostres dades: ${CORREU}.`,
+          `Responsables del tractament: ${TITULAR}.`,
+          `Per a qualsevol qüestió sobre les vostres dades, i per exercir els drets que s'expliquen més avall: ${CORREU}.`,
         ],
       },
       {
@@ -139,7 +150,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Quant de temps es conserven",
         body: [
-          `Les dades dels participants s'esborren ${DIES_CONSERVACIO} mesos després de l'activitat.`,
+          `Les dades dels participants s'esborren ${MESOS_CONSERVACIO} mesos després de l'activitat.`,
           "Les dades de salut i el DNI s'esborren tan aviat com l'activitat ha acabat i ja no fan cap falta.",
           "El registre de les vendes es conserva el temps que exigeixi la normativa fiscal.",
         ],
@@ -163,7 +174,7 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Qui ven i què",
         body: [
-          `Ven ${TITULAR}, amb les dades de l'avís legal.`,
+          `Qui ven són ${TITULAR}, amb les dades de contacte de l'avís legal.`,
           "Es venen entrades per a activitats i sortides organitzades per la promoció, i marxandatge que es recull en mà.",
           "No es fan enviaments postals. El marxandatge es recull als punts i horaris que s'anunciïn.",
         ],
@@ -171,8 +182,9 @@ export const LEGAL_DOCS: LegalDoc[] = [
       {
         heading: "Preus",
         body: [
-          "Els preus es mostren en euros i són els finals: inclouen els impostos aplicables.",
-          "No s'hi afegeix cap càrrec per gestió ni per emissió de l'entrada.",
+          "Els preus de cada modalitat es mostren en euros i inclouen els impostos aplicables.",
+          "A cada comanda s'hi afegeixen unes despeses de gestió que cobreixen el que costa processar el cobrament. Es mostren desglossades al resum, abans de pagar, i són les mateixes tant si pagueu amb targeta com amb Bizum.",
+          "El total que veieu al resum abans de prémer el botó de pagar és exactament el que se us cobra. No hi ha cap altre càrrec ni per emissió de l'entrada.",
         ],
       },
       {
