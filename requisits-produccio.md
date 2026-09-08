@@ -210,9 +210,14 @@ Decisions generals:
 - [ ] Revisió específica de la necessitat de recollir DNI.
 - [ ] Revisió específica d'al·lèrgies o dades de salut, amb base jurídica i accés restringit.
 - [ ] Confirmació de quines dades poden aparèixer a Google Sheets.
-- [ ] Casella d'acceptació de les condicions i la privacitat al moment de pagar,
-      amb enllaç als textos i registre de qui l'ha acceptada. **Encara no
-      existeix al codi.**
+- [x] Casella d'acceptació de les condicions i la privacitat al moment de pagar,
+      amb enllaç als textos. Sense marcar-la no es pot comprar, i la
+      comprovació és al servidor. Queda registrat el moment exacte a la comanda
+      i surt a l'Excel, a la columna *Condicions acceptades*.
+- [ ] **Omplir els marcadors de `src/lib/legal.ts`**: nom, DNI, adreça, correu i
+      telèfon de la persona titular, i quants mesos es conserven les dades.
+      Mentre siguin `[MARCADORS]`, els textos legals estan publicats però no
+      identifiquen ningú, i això no serveix.
 - [ ] Dret de desistiment revisat **per separat per a cada tipus de producte**.
       Les entrades a un esdeveniment amb data concreta i el marxandatge no es
       tracten igual, així que una sola política de devolucions per als tres
