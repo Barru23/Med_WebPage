@@ -8,6 +8,7 @@ import { newId, newTicketCode } from "@/lib/ids";
 import { AVAIL_EXPR, ON_SALE_EXPR } from "@/lib/availability";
 import { utcNow } from "@/lib/time";
 import { aggregateByVariant, totalUnits } from "@/lib/orders";
+import { serviceFeeCents } from "@/lib/fees";
 import type { Locale } from "@/lib/locales";
 
 async function siteOrigin() { const h = await headers(); return `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`; }
@@ -60,8 +61,12 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
     for (const f of requiredFields) if (!answers[f.id]?.trim()) return { error: `Falta la resposta a "${f.label_ca}".` };
     total += v.price_cents * line.quantity; resolved.push({ variantId: v.id, variantName: v.name_ca, quantity: line.quantity, answers, priceCents: v.price_cents });
   }
-  const orderId = newId("ord"); const paidNow = total === 0; const codes = await Promise.all(resolved.map(() => uniqueTicketCode(db))); const expiresAt = utcNow(HOLD_MS);
-  const statements = [db.prepare(`INSERT INTO "order" (id, activity_id, edition, buyer_name, buyer_email, buyer_phone, total_cents, currency, status, payment_method, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, 'EUR', ?, ?, datetime('now'), ?)`).bind(orderId, activity.id, activity.edition, buyerName, buyerEmail, buyerPhone, total, paidNow ? "paid" : "pending", paidNow ? "manual" : "stripe", paidNow ? utcNow() : null)];
+  // Despeses de gestió: mateixes per a tothom, dins del preu final, mai
+  // presentades com un recàrrec per pagar amb targeta (vegeu src/lib/fees.ts).
+  // Una comanda de 0 EUR no passa per la passarel·la i no en paga.
+  const feeCents = serviceFeeCents(total); const charged = total + feeCents;
+  const orderId = newId("ord"); const paidNow = charged === 0; const codes = await Promise.all(resolved.map(() => uniqueTicketCode(db))); const expiresAt = utcNow(HOLD_MS);
+  const statements = [db.prepare(`INSERT INTO "order" (id, activity_id, edition, buyer_name, buyer_email, buyer_phone, total_cents, fee_cents, currency, status, payment_method, created_at, paid_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'EUR', ?, ?, datetime('now'), ?)`).bind(orderId, activity.id, activity.edition, buyerName, buyerEmail, buyerPhone, charged, feeCents, paidNow ? "paid" : "pending", paidNow ? "manual" : "stripe", paidNow ? utcNow() : null)];
   resolved.forEach((line, i) => statements.push(db.prepare(`INSERT INTO order_item (id, order_id, variant_id, quantity, field_answers_json, ticket_code, variant_name_snapshot, unit_price_cents) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`).bind(newId("oi"), orderId, line.variantId, line.quantity, Object.keys(line.answers).length ? JSON.stringify(line.answers) : null, codes[i], line.variantName, line.priceCents)));
   for (const [variantId, quantity] of wanted) {
     if (paidNow) statements.push(db.prepare(`UPDATE variant SET sold = sold + ? WHERE id = ?`).bind(quantity, variantId));
@@ -73,7 +78,7 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
     db.prepare(`UPDATE stock_reservation SET expires_at = datetime('now') WHERE order_id = ? AND consumed_at IS NULL`).bind(orderId),
   ]); return { error: "No queden prou unitats disponibles. Torna-ho a provar." }; } }
   let destination = codes.length === 1 ? `/${locale}/t/${codes[0]}` : `/${locale}/o/${orderId}`;
-  if (!paidNow) { try { const stripe = await getStripe(); const origin = await siteOrigin(); const session = await stripe.checkout.sessions.create({ mode: "payment", payment_method_types: ["card", "bizum"], customer_email: buyerEmail, line_items: resolved.map((line) => ({ quantity: line.quantity, price_data: { currency: "eur", unit_amount: line.priceCents, product_data: { name: line.variantName } } })), success_url: `${origin}${destination}`, cancel_url: `${origin}/${locale}/a/${activitySlug}`, metadata: { orderId }, expires_at: Math.floor((Date.now() + HOLD_MS) / 1000) }); if (!session.url) throw new Error("Missing Stripe URL"); await db.prepare(`UPDATE "order" SET stripe_session_id = ? WHERE id = ? AND status = 'pending'`).bind(session.id, orderId).run();
+  if (!paidNow) { try { const stripe = await getStripe(); const origin = await siteOrigin(); const session = await stripe.checkout.sessions.create({ mode: "payment", payment_method_types: ["card", "bizum"], customer_email: buyerEmail, line_items: [...resolved.map((line) => ({ quantity: line.quantity, price_data: { currency: "eur", unit_amount: line.priceCents, product_data: { name: line.variantName } } })), ...(feeCents > 0 ? [{ quantity: 1, price_data: { currency: "eur" as const, unit_amount: feeCents, product_data: { name: "Despeses de gestió" } } }] : [])], success_url: `${origin}${destination}`, cancel_url: `${origin}/${locale}/a/${activitySlug}`, metadata: { orderId }, expires_at: Math.floor((Date.now() + HOLD_MS) / 1000) }); if (!session.url) throw new Error("Missing Stripe URL"); await db.prepare(`UPDATE "order" SET stripe_session_id = ? WHERE id = ? AND status = 'pending'`).bind(session.id, orderId).run();
     // An admin edit may race with session creation before stripe_session_id is
     // visible to the admin action. The revision check makes that new session
     // invalidate itself instead of exposing a stale price or sale window.

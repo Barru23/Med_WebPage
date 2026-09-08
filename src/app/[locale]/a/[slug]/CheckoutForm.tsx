@@ -3,6 +3,7 @@
 import { useActionState, useId, useState } from "react";
 import { submitOrder, type CheckoutState } from "@/lib/actions/checkout";
 import { formatPrice } from "@/lib/format";
+import { serviceFeeCents } from "@/lib/fees";
 import SubmitButton from "@/components/admin/SubmitButton";
 import { pick, type Locale } from "@/lib/i18n";
 import type { Variant, Field } from "@/lib/queries";
@@ -30,6 +31,9 @@ function parseOptions(field: Field): string[] {
 export interface CheckoutStrings {
   addTicket: string;
   maxPerOrder: string;
+  serviceFee: string;
+  subtotal: string;
+  total: string;
   buy: string;
   buyerName: string;
   buyerPhone: string;
@@ -83,6 +87,9 @@ export default function CheckoutForm({
         const v = variants.find((x) => x.id === id);
         return sum + (v?.price_cents ?? 0) * qty;
       }, 0);
+
+  const fee = serviceFeeCents(total);
+  const charged = total + fee;
 
   const unitsSoFar = hasFields
     ? lines.length
@@ -236,9 +243,28 @@ export default function CheckoutForm({
 
       {state?.error && <p className="font-mono text-sm text-signal">{state.error}</p>}
 
+      {/* El total final es veu ABANS de clicar, no només a la pantalla de
+          pagament: quan el comprador hi arriba ja s'ha compromès. */}
+      {fee > 0 && (
+        <dl className="flex flex-col gap-1 border-t border-sand pt-3 font-mono text-xs text-ink/60">
+          <div className="flex justify-between">
+            <dt>{strings.subtotal}</dt>
+            <dd>{formatPrice(total, locale)}</dd>
+          </div>
+          <div className="flex justify-between">
+            <dt>{strings.serviceFee}</dt>
+            <dd>{formatPrice(fee, locale)}</dd>
+          </div>
+          <div className="flex justify-between font-semibold text-ink">
+            <dt>{strings.total}</dt>
+            <dd>{formatPrice(charged, locale)}</dd>
+          </div>
+        </dl>
+      )}
+
       <div className="flex items-center gap-4">
         <SubmitButton className="admin-btn admin-btn-primary text-base" pendingText="Enviant…">
-          {strings.buy} · {formatPrice(total, locale)}
+          {strings.buy} · {formatPrice(charged, locale)}
         </SubmitButton>
       </div>
     </form>

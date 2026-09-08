@@ -37,7 +37,10 @@
     "length": "Llargada",
     "close": "Tancar",
     "sizeGuideNote": "Mesures de la peça plana, en centímetres. Compara-les amb una peça que ja et quedi bé.",
-    "maxPerOrder": "Màxim {n} per compra"
+    "maxPerOrder": "Màxim {n} per compra",
+    "subtotal": "Subtotal",
+    "serviceFee": "Despeses de gestió",
+    "total": "Total"
   },
   "type": {
     "event": "Activitat",

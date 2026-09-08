@@ -204,13 +204,18 @@ export async function getSales(
   // Revenue is summed from "order" directly (one row per order) — joining in
   // order_item first would duplicate o.total_cents once per line item on
   // any multi-ticket order.
+  //
+  // It is net of fee_cents: what the activity actually takes, not what passed
+  // through the gateway. Stripe's own dashboard shows the gross, so the two
+  // will differ by exactly the service fees, which is the point of storing
+  // them separately.
   const totals = await db
     .prepare(
       `SELECT
          (SELECT COALESCE(SUM(oi.quantity), 0)
             FROM order_item oi JOIN "order" o ON o.id = oi.order_id
            WHERE o.activity_id = ? ${editionFilter} AND o.status = 'paid') AS sold,
-         (SELECT COALESCE(SUM(o.total_cents), 0)
+         (SELECT COALESCE(SUM(o.total_cents - o.fee_cents), 0)
             FROM "order" o
            WHERE o.activity_id = ? ${editionFilter} AND o.status = 'paid') AS revenue_cents`,
     )

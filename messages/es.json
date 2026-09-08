@@ -37,7 +37,10 @@
     "length": "Largo",
     "close": "Cerrar",
     "sizeGuideNote": "Medidas de la prenda en plano, en centímetros. Compáralas con una prenda que ya te quede bien.",
-    "maxPerOrder": "Máximo {n} por compra"
+    "maxPerOrder": "Máximo {n} por compra",
+    "subtotal": "Subtotal",
+    "serviceFee": "Gastos de gestión",
+    "total": "Total"
   },
   "type": {
     "event": "Actividad",
