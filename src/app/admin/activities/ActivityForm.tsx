@@ -18,11 +18,19 @@ import SizeGuideEditor from "./SizeGuideEditor";
 import SubmitButton from "@/components/admin/SubmitButton";
 import type { AdminDepartment, AdminActivityDetail } from "@/lib/admin/queries";
 
+// El tipus no és una etiqueta: decideix com es lliura el que es ven. El
+// marxandatge apareix a la pantalla de Recollida i la seva columna de Vendes
+// diu "Recollit"; la resta es tanca a la Porta i diu "Check-in". Només el
+// marxandatge té guia de talles. Per això les opcions es diuen pel que fan i
+// no per la categoria: qui ompli el formulari no ha de saber-ne la teoria.
 const TYPE_LABELS: Record<string, string> = {
-  event: "Activitat",
-  merch: "Marxandatge",
-  trip: "Sortida",
+  event: "Activitat o festa — s'entra amb el codi a la porta",
+  merch: "Marxandatge — es recull en mà",
+  trip: "Sortida o viatge — s'entra amb el codi a la porta",
 };
+
+const TYPE_HELP =
+  "Tria com es lliura. El marxandatge és l'únic que surt a la pantalla de Recollida i l'únic que té guia de talles; la resta es valida a la Porta. No es pot canviar després de crear-la.";
 
 export default function ActivityForm({
   departments,
@@ -77,7 +85,7 @@ export default function ActivityForm({
         </label>
 
         <label className="block">
-          <span className="admin-label">Tipus *</span>
+          <span className="admin-label">Com es lliura *</span>
           <select
             className="admin-select"
             name="type"
@@ -93,6 +101,9 @@ export default function ActivityForm({
             ))}
           </select>
           {isEdit && <input type="hidden" name="type" value={activity!.type} />}
+          <span className="mt-1 block font-mono text-[0.7rem] leading-relaxed text-ink/70">
+            {TYPE_HELP}
+          </span>
         </label>
       </div>
 

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { GreasePencilRing } from "@/components/marks";
+import PendingDot from "@/components/Pending";
 
 export interface DepartmentGridItem {
   id: string;
@@ -80,7 +81,7 @@ export default function DepartmentGrid({
             href={`/${locale}/d/${department.slug}`}
             onPointerEnter={() => setSelectedId(department.id)}
             onFocus={() => setSelectedId(department.id)}
-            className={`group relative flex aspect-[4/5] flex-col border border-sand bg-bone p-2 outline-none transition-shadow focus-visible:ring-2 focus-visible:ring-signal ${
+            className={`press group relative flex aspect-[4/5] flex-col border border-sand bg-bone p-2 outline-none focus-visible:ring-2 focus-visible:ring-signal ${
               open ? "hover:shadow-[3px_3px_0_var(--color-sand)]" : "opacity-60"
             }`}
           >
@@ -95,8 +96,11 @@ export default function DepartmentGrid({
             </span>
             <span className="mt-1 flex items-center justify-between font-mono text-[0.6rem] uppercase tracking-widest">
               <span className="text-ink/60">{department.name}</span>
-              <span className={open ? "text-signal" : "text-ink/40"}>
-                {open ? `· ${department.openCount}` : noOpenActivities}
+              <span className="flex items-center gap-1.5">
+                <span className={open ? "text-signal" : "text-ink/40"}>
+                  {open ? `· ${department.openCount}` : noOpenActivities}
+                </span>
+                <PendingDot />
               </span>
             </span>
           </Link>

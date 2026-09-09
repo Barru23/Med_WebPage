@@ -43,7 +43,9 @@
     "total": "Total",
     "termsAccept": "I accept the {terms} and the {privacy}.",
     "termsLink": "terms of sale",
-    "privacyLink": "privacy policy"
+    "privacyLink": "privacy policy",
+    "addOne": "Add one",
+    "removeOne": "Remove one"
   },
   "type": {
     "event": "Activity",

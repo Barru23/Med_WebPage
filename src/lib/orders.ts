@@ -28,3 +28,15 @@ export function aggregateByVariant(lines: readonly OrderLine[]): Map<string, num
 export function totalUnits(lines: readonly OrderLine[]): number {
   return lines.reduce((sum, line) => sum + line.quantity, 0);
 }
+
+/**
+ * Whether a Stripe charge has been refunded in full.
+ *
+ * `charge.refunded` fires for a PARTIAL refund too, and the handler it feeds
+ * cancels the order and puts every seat back on sale. Giving somebody the
+ * booking fee back must not cost them the trip, so the amounts decide, not the
+ * event name.
+ */
+export function isFullRefund(charge: { amount: number; amount_refunded: number }): boolean {
+  return charge.amount_refunded >= charge.amount;
+}

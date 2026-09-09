@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PendingDot from "@/components/Pending";
 import { notFound } from "next/navigation";
 import { getT, pick, isLocale, type Locale } from "@/lib/i18n";
 import {
@@ -38,9 +39,10 @@ export default async function DepartmentPage({
       <div className="px-5 pt-4">
         <Link
           href={`/${locale}`}
-          className="font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
         >
           ← {t("department.back")}
+          <PendingDot />
         </Link>
       </div>
 
@@ -95,7 +97,7 @@ function ActivityTile({
   return (
     <Link
       href={`/${locale}/a/${activity.slug}`}
-      className="group relative block outline-none focus-visible:ring-2 focus-visible:ring-signal"
+      className="press group relative block outline-none focus-visible:ring-2 focus-visible:ring-signal"
     >
       {/* Paper stack behind the torn tile. */}
       <div

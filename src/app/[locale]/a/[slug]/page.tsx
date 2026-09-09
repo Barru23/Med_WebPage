@@ -1,4 +1,5 @@
 import Link from "next/link";
+import PendingDot from "@/components/Pending";
 import { notFound } from "next/navigation";
 import { getT, pick, isLocale, type Locale } from "@/lib/i18n";
 import { getActivityBySlug, LAST_PLACES_THRESHOLD } from "@/lib/queries";
@@ -38,9 +39,10 @@ export default async function ActivityPage({
       <div className="pt-4">
         <Link
           href={`/${locale}/d/${activity.dept_slug}`}
-          className="font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
         >
           ← {deptName}
+          <PendingDot />
         </Link>
       </div>
 
@@ -142,7 +144,9 @@ export default async function ActivityPage({
             fields={fields}
             maxPerOrder={activity.max_per_order}
             strings={{
+              addOne: t("activity.addOne"),
               addTicket: t("activity.addTicket"),
+              removeOne: t("activity.removeOne"),
               buy: t("activity.buy"),
               buyerName: t("activity.buyerName"),
               buyerPhone: t("activity.buyerPhone"),

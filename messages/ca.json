@@ -43,7 +43,9 @@
     "total": "Total",
     "termsAccept": "Accepto les {terms} i la {privacy}.",
     "termsLink": "condicions de compra",
-    "privacyLink": "política de privacitat"
+    "privacyLink": "política de privacitat",
+    "addOne": "Afegeix-ne una",
+    "removeOne": "Treu-ne una"
   },
   "type": {
     "event": "Activitat",

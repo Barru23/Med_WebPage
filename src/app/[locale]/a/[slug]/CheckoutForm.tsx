@@ -30,7 +30,9 @@ function parseOptions(field: Field): string[] {
 }
 
 export interface CheckoutStrings {
+  addOne: string;
   addTicket: string;
+  removeOne: string;
   maxPerOrder: string;
   privacyLink: string;
   serviceFee: string;
@@ -106,6 +108,35 @@ export default function CheckoutForm({
         .filter(([, qty]) => qty > 0)
         .map(([variantId, quantity]) => ({ variantId, quantity, answers: {} }));
 
+  /** Unitats que encara caben d'aquesta modalitat: el que en queda, i el que
+   *  permet el màxim per comanda un cop descomptat el que ja hi ha triat. */
+  function roomFor(v: Variant): number {
+    const current = quantities[v.id] ?? 0;
+    const others = unitsSoFar - current;
+    const ceiling = maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
+    return Math.max(0, ceiling - current);
+  }
+
+  /** Mou una quantitat. Els botons hi passen un increment; el teclat, el valor
+   *  sencer. Els dos camins passen pel mateix sostre, que és tot el sentit de
+   *  tenir-ho en un sol lloc.
+   *
+   *  El sostre es calcula des de `prev` i no des de l'estat d'aquest render: un
+   *  botó convida a prémer-lo dues vegades seguides, React ajunta les dues
+   *  actualitzacions, i comptar les altres modalitats des del render vell deixa
+   *  colar una unitat per sobre del màxim per comanda. */
+  function setQuantity(v: Variant, value: number, absolute = false) {
+    setQuantities((prev) => {
+      const current = prev[v.id] ?? 0;
+      const others = Object.entries(prev).reduce(
+        (sum, [id, qty]) => (id === v.id ? sum : sum + qty),
+        0,
+      );
+      const ceiling = maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
+      return { ...prev, [v.id]: Math.max(0, Math.min(ceiling, absolute ? value : current + value)) };
+    });
+  }
+
   return (
     <form action={formAction} className="flex flex-col gap-6">
       <input type="hidden" name="lines_json" value={JSON.stringify(linesPayload)} readOnly />
@@ -125,26 +156,36 @@ export default function CheckoutForm({
               <span className="font-mono text-sm text-ink">
                 {formatPrice(v.price_cents, locale)}
               </span>
-              <input
-                type="number"
-                min={0}
-                max={v.avail}
-                value={quantities[v.id] ?? 0}
-                onChange={(e) =>
-                  setQuantities((prev) => {
-                    const current = prev[v.id] ?? 0;
-                    const others = unitsSoFar - current;
-                    const room =
-                      maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
-                    return {
-                      ...prev,
-                      [v.id]: Math.max(0, Math.min(room, Number(e.target.value) || 0)),
-                    };
-                  })
-                }
-                className="admin-input w-16 text-center"
-                aria-label={pick(v, "name", locale)}
-              />
+              <div className="flex shrink-0 items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => setQuantity(v, -1)}
+                  disabled={(quantities[v.id] ?? 0) === 0}
+                  className="qty-btn"
+                  aria-label={`${strings.removeOne} — ${pick(v, "name", locale)}`}
+                >
+                  −
+                </button>
+                <input
+                  type="number"
+                  inputMode="numeric"
+                  min={0}
+                  max={v.avail}
+                  value={quantities[v.id] ?? 0}
+                  onChange={(e) => setQuantity(v, Number(e.target.value) || 0, true)}
+                  className="admin-input w-12 text-center"
+                  aria-label={pick(v, "name", locale)}
+                />
+                <button
+                  type="button"
+                  onClick={() => setQuantity(v, 1)}
+                  disabled={roomFor(v) === 0}
+                  className="qty-btn"
+                  aria-label={`${strings.addOne} — ${pick(v, "name", locale)}`}
+                >
+                  +
+                </button>
+              </div>
             </li>
           ))}
         </ul>

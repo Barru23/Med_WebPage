@@ -26,6 +26,12 @@ export type CheckoutState = { error?: string } | null;
 interface CheckoutLine { variantId: string; quantity: number; answers: Record<string, string> }
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 function str(v: FormDataEntryValue | null) { const s = typeof v === "string" ? v.trim() : ""; return s || null; }
+
+// Sostre del text lliure. No és una restricció de disseny: tot el que s'escriu
+// aquí acaba a la base de dades, a una cel·la del full de Google i dins d'un
+// correu, i cap dels tres ha d'empassar-se un tros de novel·la enganxat sense
+// voler. Prou llargs perquè cap resposta de veritat hi topi.
+const MAX_LEN = { name: 120, email: 200, phone: 40, answer: 500 } as const;
 function parseLines(json: string): CheckoutLine[] { try { const p = JSON.parse(json); return Array.isArray(p) ? p : []; } catch { return []; } }
 async function uniqueTicketCode(db: D1Database) { for (let i = 0; i < 5; i++) { const code = newTicketCode(); if (!(await db.prepare(`SELECT 1 FROM order_item WHERE ticket_code = ?`).bind(code).first())) return code; } throw new Error("Could not generate a unique ticket code"); }
 
@@ -33,6 +39,9 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   const buyerName = str(formData.get("buyer_name")); const buyerEmail = str(formData.get("buyer_email")); const buyerPhone = str(formData.get("buyer_phone"));
   const lines = parseLines(String(formData.get("lines_json") ?? "[]")).filter((l) => Number.isInteger(l.quantity) && l.quantity > 0);
   if (!buyerName || !buyerEmail) return { error: "El nom i l'email són obligatoris." }; if (!EMAIL_RE.test(buyerEmail)) return { error: "L'email no és vàlid." }; if (!lines.length) return { error: "Selecciona almenys una modalitat." };
+  if (buyerName.length > MAX_LEN.name) return { error: `El nom no pot passar de ${MAX_LEN.name} caràcters.` };
+  if (buyerEmail.length > MAX_LEN.email) return { error: "L'email és massa llarg." };
+  if (buyerPhone && buyerPhone.length > MAX_LEN.phone) return { error: "El telèfon no és vàlid." };
   // La casella del formulari es pot saltar; això no. Sense acceptació no hi ha
   // comanda, i queda registrat quan es va donar (requisits-produccio.md §6).
   if (!formData.get("terms_accepted")) return { error: "Has d'acceptar les condicions de compra i la política de privacitat." };
@@ -41,8 +50,33 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   // The cap is enforced here, not only in the form: the line payload is a
   // hidden field and anyone can edit it before posting.
   if (activity.max_per_order && totalUnits(lines) > activity.max_per_order) return { error: `Màxim ${activity.max_per_order} unitats per comanda.` };
-  const { results: fields } = await db.prepare(`SELECT id FROM field WHERE activity_id = ?`).bind(activity.id).all<{ id: string }>(); const fieldIds = new Set(fields.map((f) => f.id));
+  const { results: fields } = await db.prepare(`SELECT id, label_ca FROM field WHERE activity_id = ?`).bind(activity.id).all<{ id: string; label_ca: string }>(); const fieldIds = new Set(fields.map((f) => f.id)); const fieldLabels = new Map(fields.map((f) => [f.id, f.label_ca]));
   const { results: requiredFields } = await db.prepare(`SELECT id, label_ca FROM field WHERE activity_id = ? AND required = 1`).bind(activity.id).all<{ id: string; label_ca: string }>();
+
+  // Un comprador que comença, ho deixa a mitges i torna a començar es bloquejava
+  // a si mateix: la seva primera reserva reté les places mitja hora i la segona
+  // intent es troba l'activitat plena. En una de cent places, uns quants dubtes
+  // així la deixen "exhaurida" sense que ningú hagi pagat res.
+  //
+  // La reserva anterior s'allibera abans de comptar el que queda, però NOMÉS
+  // després que Stripe confirmi que aquella sessió ja no es pot pagar. Cancel·lar
+  // una comanda que encara admet pagament seria cobrar sense donar cap entrada.
+  const { results: abandoned } = await db.prepare(`SELECT id, stripe_session_id FROM "order" WHERE buyer_email = ? AND activity_id = ? AND status = 'pending' AND payment_method = 'stripe' AND stripe_session_id IS NOT NULL`).bind(buyerEmail, activity.id).all<{ id: string; stripe_session_id: string }>();
+  for (const old of abandoned) {
+    try {
+      const stripe = await getStripe();
+      await stripe.checkout.sessions.expire(old.stripe_session_id);
+      await db.batch([
+        db.prepare(`UPDATE stock_reservation SET expires_at = datetime('now') WHERE order_id = ? AND consumed_at IS NULL`).bind(old.id),
+        db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ? AND status = 'pending'`).bind(old.id),
+      ]);
+    } catch (err) {
+      // Si Stripe no la deixa caducar és que ja està pagada o ja ha caducat sola.
+      // En cap dels dos casos toca tocar la comanda: es deixa estar i el pitjor
+      // que passa és el que passava abans.
+      console.error("[checkout] Could not release an abandoned hold", { orderId: old.id, message: err instanceof Error ? err.message : String(err) });
+    }
+  }
 
   // Several lines can name the same variant — a trip bought for two friends is
   // two order_item rows of "amb bus". So availability is checked against the
@@ -61,7 +95,12 @@ export async function submitOrder(activitySlug: string, locale: Locale, _prev: C
   const resolved: Array<{ variantId: string; variantName: string; quantity: number; answers: Record<string, string>; priceCents: number }> = []; let total = 0;
   for (const line of lines) {
     const v = variants.get(line.variantId); if (!v) return { error: "Modalitat no vàlida." };
-    const answers: Record<string, string> = {}; for (const [key, value] of Object.entries(line.answers ?? {})) if (fieldIds.has(key) && typeof value === "string") answers[key] = value;
+    const answers: Record<string, string> = {};
+    for (const [key, value] of Object.entries(line.answers ?? {})) {
+      if (!fieldIds.has(key) || typeof value !== "string") continue;
+      if (value.length > MAX_LEN.answer) return { error: `La resposta a "${fieldLabels.get(key) ?? key}" és massa llarga.` };
+      answers[key] = value;
+    }
     for (const f of requiredFields) if (!answers[f.id]?.trim()) return { error: `Falta la resposta a "${f.label_ca}".` };
     total += v.price_cents * line.quantity; resolved.push({ variantId: v.id, variantName: v.name_ca, quantity: line.quantity, answers, priceCents: v.price_cents });
   }

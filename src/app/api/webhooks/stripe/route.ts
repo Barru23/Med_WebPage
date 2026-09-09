@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getStripe } from "@/lib/stripe";
 import { getDb } from "@/lib/db";
 import { syncOrderToRelay } from "@/lib/relay";
+import { isFullRefund } from "@/lib/orders";
 
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature"); if (!signature) return new NextResponse("Missing signature", { status: 400 });
@@ -15,7 +16,19 @@ export async function POST(req: NextRequest) {
   try {
     if (event.type === "checkout.session.completed" || event.type === "checkout.session.async_payment_succeeded") await confirmOrderPaid(event.data.object as Stripe.Checkout.Session, req.nextUrl.origin);
     else if (event.type === "checkout.session.async_payment_failed" || event.type === "checkout.session.expired") await cancelOrder(event.data.object as Stripe.Checkout.Session);
-    else if (event.type === "charge.refunded" || event.type === "charge.dispute.created") await markRefunded(event.data.object as Stripe.Charge);
+    else if (event.type === "charge.refunded") {
+      const charge = event.data.object as Stripe.Charge;
+      // Stripe sends charge.refunded for a PARTIAL refund too. Voiding the order
+      // there would kill a code the buyer is still entitled to use: giving someone
+      // the booking fee back must not cost them the trip. Only a refund of the
+      // whole charge cancels the order.
+      if (isFullRefund(charge)) await voidOrder(charge.payment_intent);
+    } else if (event.type === "charge.dispute.created") {
+      // A dispute is not a refund — the money has not moved back yet — but the
+      // code stops working immediately either way. Better an argument at the door
+      // than a seat handed to someone who has already reversed the payment.
+      await voidOrder((event.data.object as Stripe.Dispute).payment_intent);
+    }
   } catch {
     // Do not permanently acknowledge an event that failed halfway through.
     await db.prepare(`DELETE FROM stripe_event WHERE id = ?`).bind(event.id).run();
@@ -58,8 +71,15 @@ async function cancelOrder(session: Stripe.Checkout.Session) {
   ]);
 }
 
-async function markRefunded(charge: Stripe.Charge) {
-  const db = await getDb(); const pi = typeof charge.payment_intent === "string" ? charge.payment_intent : null; if (!pi) return;
+/**
+ * Cancel a paid order and put its seats back on sale.
+ *
+ * Takes the payment intent rather than the Stripe object, because the two
+ * events that call it carry different shapes — a Charge and a Dispute — and
+ * only this field means the same thing in both.
+ */
+async function voidOrder(paymentIntent: string | Stripe.PaymentIntent | null | undefined) {
+  const db = await getDb(); const pi = typeof paymentIntent === "string" ? paymentIntent : null; if (!pi) return;
   // Refunding has to give the seat back. `sold` was incremented on payment, so
   // leaving it alone would burn a unit of capacity per refund — 100 places with
   // 5 refunds would only ever sell 95. Guarded by status = 'paid' so a repeated
