@@ -39,7 +39,7 @@ export default async function DepartmentPage({
       <div className="px-5 pt-4">
         <Link
           href={`/${locale}`}
-          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/70 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
         >
           ← {t("department.back")}
           <PendingDot />
@@ -57,7 +57,7 @@ export default async function DepartmentPage({
       </header>
 
       {activities.length === 0 ? (
-        <p className="px-5 font-mono text-sm uppercase tracking-widest text-ink/50">
+        <p className="px-5 font-mono text-sm uppercase tracking-widest text-ink/70">
           {t("department.noOpenActivities")}
         </p>
       ) : (
@@ -110,7 +110,7 @@ function ActivityTile({
         }`}
       >
         <div className="flex items-start justify-between gap-2">
-          <span className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/50">
+          <span className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/70">
             {t(`type.${activity.type}`)}
           </span>
           {soldOut && <Stamp>{t("department.soldOut")}</Stamp>}

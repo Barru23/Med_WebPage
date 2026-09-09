@@ -203,7 +203,7 @@ export default function ActivityForm({
       </div>
 
       <section>
-        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
           Modalitats
         </h2>
         <div className="mt-2">
@@ -212,7 +212,7 @@ export default function ActivityForm({
       </section>
 
       <section>
-        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
           Galeria de fotos
         </h2>
         <p className="mt-1 text-sm text-ink/60">Pots seleccionar diverses imatges alhora.</p>
@@ -223,7 +223,7 @@ export default function ActivityForm({
 
       {activityType === "merch" && (
         <section>
-          <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+          <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
             Guia de talles
           </h2>
           <p className="mt-1 text-sm text-ink/60">Mesura la peça plana, d&apos;aixella a aixella i de dalt a baix.</p>
@@ -238,7 +238,7 @@ export default function ActivityForm({
       )}
 
       <section>
-        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
           Preguntes addicionals (opcional)
         </h2>
         <div className="mt-2">

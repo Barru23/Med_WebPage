@@ -45,7 +45,7 @@ export default async function AdminActivitiesPage({
           <Link
             key={value}
             href={href}
-            className={`border px-3 py-1.5 ${status === value ? "border-ink text-ink" : "border-sand text-ink/50"}`}
+            className={`border px-3 py-1.5 ${status === value ? "border-ink text-ink" : "border-sand text-ink/70"}`}
           >
             {label}
           </Link>
@@ -54,7 +54,7 @@ export default async function AdminActivitiesPage({
 
       <div className="mt-4 flex flex-col gap-2">
         {rows.length === 0 && (
-          <p className="font-mono text-sm text-ink/50">Cap activitat aquí.</p>
+          <p className="font-mono text-sm text-ink/70">Cap activitat aquí.</p>
         )}
         {rows.map((a) => (
           <div
@@ -63,7 +63,7 @@ export default async function AdminActivitiesPage({
           >
             <div>
               <p className="font-body font-semibold">{a.title_ca}</p>
-              <p className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/50">
+              <p className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/70">
                 {a.dept_name_ca} · {TYPE_LABELS[a.type] ?? a.type}
                 {a.edition ? ` · ${a.edition}` : ""}
                 {a.order_count > 0 ? ` · ${a.order_count} comandes` : ""}

@@ -30,7 +30,7 @@ export default async function AdminLayout({
           <form action={logout}>
             <button
               type="submit"
-              className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/50 underline underline-offset-4 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+              className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/70 underline underline-offset-4 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
             >
               Sortir
             </button>

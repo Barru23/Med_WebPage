@@ -65,7 +65,7 @@ export default async function OrderReceiptPage({
 
       {pending && <p className="mt-3 font-body text-sm text-ink/70">{t("ticket.pendingBody")}</p>}
 
-      <h2 className="mt-8 font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/50">
+      <h2 className="mt-8 font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/70">
         {t("order.tickets")}
       </h2>
       <ul className="mt-3 divide-y divide-sand border-y border-sand">

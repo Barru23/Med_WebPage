@@ -24,7 +24,7 @@ export default async function DoorPage({
   return (
     <div className="mx-auto max-w-sm">
       <h1 className="font-display text-3xl tracking-tight">Porta</h1>
-      <p className="mt-1 font-mono text-xs text-ink/50">
+      <p className="mt-1 font-mono text-xs text-ink/70">
         Escriu el codi de l&apos;entrada, o escaneja el QR si el porten.
       </p>
       <div className="mt-4">
@@ -32,7 +32,7 @@ export default async function DoorPage({
       </div>
 
       <section className="mt-10 border-t border-sand pt-6">
-        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
           Ha perdut el codi
         </h2>
         <p className="mt-1 font-body text-sm text-ink/60">
@@ -53,17 +53,17 @@ export default async function DoorPage({
 
         <div className="mt-4 flex flex-col gap-2">
           {query && results.length === 0 && (
-            <p className="font-mono text-sm text-ink/50">Cap resultat per &quot;{query}&quot;.</p>
+            <p className="font-mono text-sm text-ink/70">Cap resultat per &quot;{query}&quot;.</p>
           )}
           {results.map((r) => (
             <div key={r.order_item_id} className="admin-card p-3">
               <p className="font-mono text-xl tracking-[0.3em] text-ink">{r.ticket_code}</p>
               <p className="mt-1 font-body font-semibold">{r.buyer_name}</p>
-              <p className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/50">
+              <p className="font-mono text-[0.65rem] uppercase tracking-widest text-ink/70">
                 {r.activity_title} · {r.variant_name} ×{r.quantity}
               </p>
               <p className="mt-1 font-mono text-[0.65rem] uppercase tracking-widest">
-                <span className={r.order_status === "paid" ? "text-ink/50" : "text-signal"}>
+                <span className={r.order_status === "paid" ? "text-ink/70" : "text-signal"}>
                   {STATUS_LABELS[r.order_status] ?? r.order_status}
                 </span>
                 {r.checked_in_at && <span className="text-signal"> · ja ha entrat</span>}

@@ -59,7 +59,7 @@ export default async function SalesPage({
         </form>
       )}
       {sales.currentEdition && (
-        <p className="mt-1 font-mono text-xs text-ink/50">Edició: {sales.currentEdition}</p>
+        <p className="mt-1 font-mono text-xs text-ink/70">Edició: {sales.currentEdition}</p>
       )}
 
       <div className="mt-6 grid grid-cols-3 gap-3">
@@ -92,7 +92,7 @@ export default async function SalesPage({
         </a>
       </div>
 
-      <p className="mt-2 font-mono text-xs text-ink/50">
+      <p className="mt-2 font-mono text-xs text-ink/70">
         L’Excel es genera de la base de dades cada vegada que el prems. El full de Google és una
         còpia que s’actualitza a cada comanda pagada, còmode per compartir, i pot quedar enrere
         si la sincronització falla.
@@ -120,7 +120,7 @@ export default async function SalesPage({
                 <td className="py-2 pr-3">
                   {b.buyer_name}
                   <br />
-                  <span className="text-ink/40">{b.buyer_email}</span>
+                  <span className="text-ink/70">{b.buyer_email}</span>
                 </td>
                 <td className="py-2 pr-3">
                   {b.variant_name} ×{b.quantity}
@@ -152,7 +152,7 @@ export default async function SalesPage({
             ))}
             {sales.buyers.length === 0 && (
               <tr>
-                <td colSpan={8} className="py-4 text-center text-ink/40">
+                <td colSpan={8} className="py-4 text-center text-ink/70">
                   Encara no hi ha comandes.
                 </td>
               </tr>
@@ -162,7 +162,7 @@ export default async function SalesPage({
       </div>
 
       <div className="mt-8">
-        <Link href="/admin/activities" className="font-mono text-xs uppercase tracking-widest text-ink/50">
+        <Link href="/admin/activities" className="font-mono text-xs uppercase tracking-widest text-ink/70">
           ← Activitats
         </Link>
       </div>

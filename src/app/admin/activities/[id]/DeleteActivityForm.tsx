@@ -15,7 +15,7 @@ export default function DeleteActivityForm({
 
   if (orderCount > 0) {
     return (
-      <p className="font-mono text-xs text-ink/50">
+      <p className="font-mono text-xs text-ink/70">
         No es pot eliminar: ja té {orderCount} comanda{orderCount === 1 ? "" : "s"}. Fes servir
         l&apos;interruptor <strong>Publicada</strong> per amagar-la en lloc d&apos;eliminar-la.
       </p>

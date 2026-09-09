@@ -31,7 +31,7 @@ export default function DepartmentRow({
       <button
         type="button"
         aria-label="Arrossega per reordenar"
-        className="cursor-grab self-start rounded border border-sand px-2 py-1 font-mono text-xs text-ink/50 active:cursor-grabbing"
+        className="cursor-grab self-start rounded border border-sand px-2 py-1 font-mono text-xs text-ink/70 active:cursor-grabbing"
         {...dragHandleProps}
       >
         ⠿
@@ -48,7 +48,7 @@ export default function DepartmentRow({
             unoptimized
           />
         ) : (
-          <div className="flex h-16 w-16 items-center justify-center border border-dashed border-sand font-mono text-[0.6rem] text-ink/40">
+          <div className="flex h-16 w-16 items-center justify-center border border-dashed border-sand font-mono text-[0.6rem] text-ink/70">
             sense foto
           </div>
         )}

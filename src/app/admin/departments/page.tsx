@@ -12,7 +12,7 @@ export default async function AdminDepartmentsPage() {
   return (
     <div className="mx-auto max-w-3xl">
       <h1 className="font-display text-3xl tracking-tight">Departaments</h1>
-      <p className="mt-1 font-mono text-xs text-ink/50">
+      <p className="mt-1 font-mono text-xs text-ink/70">
         Nom en tres idiomes, foto, arrossega per reordenar.
       </p>
 

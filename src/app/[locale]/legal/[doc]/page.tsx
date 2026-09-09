@@ -39,7 +39,7 @@ export default async function LegalPage({
             className={
               item.slug === found.slug
                 ? "text-signal"
-                : "text-ink/50 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-signal"
+                : "text-ink/70 outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-signal"
             }
           >
             {item.label}
@@ -70,7 +70,7 @@ export default async function LegalPage({
         </section>
       ))}
 
-      <p className="mt-12 border-t border-sand pt-5 font-mono text-[0.65rem] leading-relaxed text-ink/40">
+      <p className="mt-12 border-t border-sand pt-5 font-mono text-[0.65rem] leading-relaxed text-ink/70">
         Si alguna cosa d&apos;aquesta pàgina no s&apos;entén o us sembla que no quadra, escriviu-nos
         abans de comprar. Preferim explicar-ho que discutir-ho després.
       </p>

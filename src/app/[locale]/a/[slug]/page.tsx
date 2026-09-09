@@ -39,7 +39,7 @@ export default async function ActivityPage({
       <div className="pt-4">
         <Link
           href={`/${locale}/d/${activity.dept_slug}`}
-          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/50 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
+          className="press inline-flex items-center gap-1.5 font-mono text-xs uppercase tracking-widest text-ink/70 outline-none hover:text-signal focus-visible:ring-2 focus-visible:ring-signal"
         >
           ← {deptName}
           <PendingDot />
@@ -91,7 +91,7 @@ export default async function ActivityPage({
 
       {images.length > 0 && (
         <section className="mt-8" aria-labelledby="gallery-title">
-          <h2 id="gallery-title" className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/50">
+          <h2 id="gallery-title" className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/70">
             {t("activity.gallery")}
           </h2>
           <div className="-mx-5 mt-3 flex snap-x snap-mandatory gap-3 overflow-x-auto px-5 pb-2 sm:mx-0 sm:grid sm:grid-cols-2 sm:overflow-visible sm:px-0">
@@ -113,7 +113,7 @@ export default async function ActivityPage({
       {/* Checkout — modalitats, custom fields and buyer details in one form. */}
       <section className="mt-8">
         <div className="flex items-baseline justify-between gap-2">
-          <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/50">
+          <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/70">
             {t("activity.modalitats")}
           </h2>
           {hasLastPlaces && (

@@ -81,7 +81,7 @@ export default function CheckoutForm({
   );
 
   if (buyableVariants.length === 0) {
-    return <p className="font-mono text-sm text-ink/50">{strings.soldOut}</p>;
+    return <p className="font-mono text-sm text-ink/70">{strings.soldOut}</p>;
   }
 
   const total = hasFields
@@ -142,7 +142,7 @@ export default function CheckoutForm({
       <input type="hidden" name="lines_json" value={JSON.stringify(linesPayload)} readOnly />
 
       {maxPerOrder !== null && (
-        <p className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+        <p className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
           {strings.maxPerOrder.replace("{n}", String(maxPerOrder))}
         </p>
       )}
@@ -196,7 +196,7 @@ export default function CheckoutForm({
           {lines.map((line, i) => (
             <div key={line.uid} className="admin-card p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/50">
+                <span className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
                   {strings.modalitats} #{i + 1}
                 </span>
                 {lines.length > 1 && (
@@ -267,7 +267,7 @@ export default function CheckoutForm({
       )}
 
       <div>
-        <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/50">
+        <h2 className="font-mono text-[0.7rem] uppercase tracking-[0.2em] text-ink/70">
           {strings.yourDetails}
         </h2>
         <div className="mt-2 grid grid-cols-1 gap-2 sm:grid-cols-3">

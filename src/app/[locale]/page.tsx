@@ -53,7 +53,7 @@ export default async function HomePage({
             {t("home.onSaleNow")}
           </h2>
           {onSale.length === 0 ? (
-            <p className="font-mono text-xs text-ink/50">
+            <p className="font-mono text-xs text-ink/70">
               {t("home.nothingOnSale")}
             </p>
           ) : (

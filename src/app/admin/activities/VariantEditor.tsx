@@ -86,7 +86,7 @@ export default function VariantEditor({
           </label>
           <div className="sm:col-span-1">
             {v.sold > 0 ? (
-              <span className="block font-mono text-[0.65rem] text-ink/50">
+              <span className="block font-mono text-[0.65rem] text-ink/70">
                 {v.sold} venud{v.sold === 1 ? "a" : "es"}
               </span>
             ) : (

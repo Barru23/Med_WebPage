@@ -32,7 +32,7 @@ export default async function LocaleLayout({
         }))}
       />
       <main className="flex-1">{children}</main>
-      <footer className="border-t border-sand px-5 py-6 font-mono text-[0.7rem] uppercase tracking-widest text-ink/40">
+      <footer className="border-t border-sand px-5 py-6 font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
         <p>
           {t("brand")} · {t("tagline")}
         </p>

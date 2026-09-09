@@ -99,7 +99,7 @@ export default async function TicketPage({
           {ticket.ticket_code}
         </p>
         {ticket.quantity > 1 && (
-          <p className="mt-1 font-mono text-xs text-ink/50">×{ticket.quantity}</p>
+          <p className="mt-1 font-mono text-xs text-ink/70">×{ticket.quantity}</p>
         )}
       </div>
     </div>

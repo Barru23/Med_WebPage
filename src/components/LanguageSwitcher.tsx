@@ -31,7 +31,7 @@ export default function LanguageSwitcher({
             className={
               loc === currentLocale
                 ? "text-signal"
-                : "text-ink/50 transition-colors hover:text-ink"
+                : "text-ink/70 transition-colors hover:text-ink"
             }
           >
             {localeLabels[loc]}

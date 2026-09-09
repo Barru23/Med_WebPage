@@ -97,7 +97,7 @@ export default function DepartmentGrid({
             <span className="mt-1 flex items-center justify-between font-mono text-[0.6rem] uppercase tracking-widest">
               <span className="text-ink/60">{department.name}</span>
               <span className="flex items-center gap-1.5">
-                <span className={open ? "text-signal" : "text-ink/40"}>
+                <span className={open ? "text-signal" : "text-ink/70"}>
                   {open ? `· ${department.openCount}` : noOpenActivities}
                 </span>
                 <PendingDot />
