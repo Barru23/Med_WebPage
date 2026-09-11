@@ -7,9 +7,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
  * ADMIN_PASSWORD and never stored in the database or in Git.
  *
  * The session cookie is an expiry timestamp plus an HMAC of it, keyed by the
- * password itself. That means there is exactly one secret for the students to
- * manage, and changing the password immediately invalidates every open session
- * — which is the behaviour you want the day someone leaves the team.
+ * independent ADMIN_SESSION_SECRET. This keeps a leaked cookie-signing key from
+ * disclosing the shared login password; rotate both secrets when access changes.
  *
  * This is the *only* thing standing in front of /admin, so it is checked in
  * three places: the admin layout (every page), the export route handler (which
@@ -25,15 +24,21 @@ async function adminPassword(): Promise<string | null> {
   return typeof value === "string" && value.length > 0 ? value : null;
 }
 
-/** Whether an ADMIN_PASSWORD secret exists at all, for the login screen copy. */
-export async function isConfigured(): Promise<boolean> {
-  return (await adminPassword()) !== null;
+async function adminSessionSecret(): Promise<string | null> {
+  const { env } = await getCloudflareContext({ async: true });
+  const value = env.ADMIN_SESSION_SECRET;
+  return typeof value === "string" && value.length >= 32 ? value : null;
 }
 
-async function hmacKey(password: string): Promise<CryptoKey> {
+/** Whether an ADMIN_PASSWORD secret exists at all, for the login screen copy. */
+export async function isConfigured(): Promise<boolean> {
+  return (await adminPassword()) !== null && (await adminSessionSecret()) !== null;
+}
+
+async function hmacKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey(
     "raw",
-    new TextEncoder().encode(password),
+    new TextEncoder().encode(secret),
     { name: "HMAC", hash: "SHA-256" },
     false,
     ["sign"],
@@ -47,10 +52,10 @@ function toBase64Url(bytes: ArrayBuffer): string {
     .replace(/=+$/, "");
 }
 
-async function sign(payload: string, password: string): Promise<string> {
+async function sign(payload: string, secret: string): Promise<string> {
   const signature = await crypto.subtle.sign(
     "HMAC",
-    await hmacKey(password),
+    await hmacKey(secret),
     new TextEncoder().encode(payload),
   );
   return toBase64Url(signature);
@@ -78,26 +83,32 @@ export async function passwordMatches(candidate: string): Promise<boolean> {
 }
 
 export async function startSession(): Promise<boolean> {
-  const password = await adminPassword();
-  if (!password) return false;
+  const secret = await adminSessionSecret();
+  if (!secret) return false;
   const expiresAt = Date.now() + SESSION_MS;
-  const token = `${expiresAt}.${await sign(String(expiresAt), password)}`;
+  const token = `${expiresAt}.${await sign(String(expiresAt), secret)}`;
   (await cookies()).set(ADMIN_COOKIE, token, {
     httpOnly: true,
     secure: true,
     sameSite: "lax",
-    path: "/",
+    path: "/admin",
     maxAge: SESSION_MS / 1000,
   });
   return true;
 }
 
 export async function endSession(): Promise<void> {
-  (await cookies()).delete(ADMIN_COOKIE);
+  (await cookies()).set(ADMIN_COOKIE, "", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax",
+    path: "/admin",
+    maxAge: 0,
+  });
 }
 
 /**
- * Verify a session cookie against the password. Kept free of next/headers and
+ * Verify a session cookie against the session secret. Kept free of next/headers and
  * of the Cloudflare context helper so src/proxy.ts can call it too — the proxy
  * is where the check has to happen, because a layout that declines to render
  * its children still lets those children run and ship their data in the
@@ -105,21 +116,21 @@ export async function endSession(): Promise<void> {
  */
 export async function verifySessionToken(
   token: string | undefined,
-  password: string | undefined,
+  secret: string | undefined,
 ): Promise<boolean> {
-  if (!token || !password) return false;
+  if (!token || !secret) return false;
   const separator = token.lastIndexOf(".");
   if (separator < 1) return false;
   const expiresAt = Number(token.slice(0, separator));
   if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
-  return safeEqual(token.slice(separator + 1), await sign(String(expiresAt), password));
+  return safeEqual(token.slice(separator + 1), await sign(String(expiresAt), secret));
 }
 
 /** Whether the current request carries a valid, unexpired admin session. */
 export async function isAdmin(): Promise<boolean> {
-  const password = await adminPassword();
-  if (!password) return false;
-  return verifySessionToken((await cookies()).get(ADMIN_COOKIE)?.value, password);
+  const secret = await adminSessionSecret();
+  if (!secret) return false;
+  return verifySessionToken((await cookies()).get(ADMIN_COOKIE)?.value, secret);
 }
 
 /**

@@ -44,6 +44,7 @@
     "termsAccept": "Acepto las {terms} y la {privacy}.",
     "termsLink": "condiciones de compra",
     "privacyLink": "política de privacidad",
+    "sensitiveConsent": "Acepto expresamente el tratamiento de los datos sensibles indicados para organizar esta actividad.",
     "addOne": "Añade una",
     "removeOne": "Quita una"
   },
@@ -57,6 +58,9 @@
     "pendingBody": "Hemos reservado tu plaza. Recibirás la entrada cuando se confirme el pago — vuelve a esta página más tarde.",
     "notFound": "Esta entrada no existe.",
     "checkedInAt": "Utilizada",
+    "cancelled": "Cancelada",
+    "refunded": "Reembolsada",
+    "disputed": "Entrada bloqueada",
     "buyer": "Comprador",
     "code": "Código"
   },
@@ -64,6 +68,9 @@
     "title": "Tu pedido",
     "pendingBanner": "Pendiente de pago",
     "paidBanner": "Pagado",
+    "cancelledBanner": "Cancelado",
+    "refundedBanner": "Reembolsado",
+    "disputedBanner": "Pago en disputa",
     "notFound": "Este pedido no existe.",
     "viewTicket": "Ver entrada",
     "tickets": "Entradas"

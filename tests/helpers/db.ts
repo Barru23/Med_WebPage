@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { ON_SALE_EXPR } from "../../src/lib/availability.ts";
+import { AVAIL_EXPR, ON_SALE_EXPR } from "../../src/lib/availability.ts";
 
 const MIGRATIONS = join(import.meta.dirname, "..", "..", "migrations");
 
@@ -44,16 +44,4 @@ export const RESERVE_SQL = `INSERT INTO stock_reservation (id, order_id, variant
     FROM variant v
    WHERE v.id = ?
      AND ${ON_SALE_EXPR}
-     AND v.stock - v.sold - (
-       SELECT COALESCE(SUM(sr.quantity), 0) FROM stock_reservation sr
-        WHERE sr.variant_id = v.id AND sr.consumed_at IS NULL
-          AND sr.expires_at > datetime('now')
-     ) >= ?`;
-
-/** The refund path from src/app/api/webhooks/stripe/route.ts, verbatim. */
-export const REFUND_SQL = `UPDATE variant SET sold = MAX(sold - ?, 0) WHERE id = ?`;
-
-export function soldOf(db: DatabaseSync, variantId: string): number {
-  const row = db.prepare(`SELECT sold FROM variant WHERE id = ?`).get(variantId) as { sold: number };
-  return row.sold;
-}
+     AND ${AVAIL_EXPR} >= ?`;

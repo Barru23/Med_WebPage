@@ -13,6 +13,8 @@ export default function LanguageSwitcher({
 
   function switchTo(next: Locale) {
     if (next === currentLocale) return;
+    // Browser cookie mutation is the intended side effect of this user action.
+    // eslint-disable-next-line react-hooks/immutability
     document.cookie = `NEXT_LOCALE=${next}; path=/; max-age=31536000; samesite=lax`;
     const parts = pathname.split("/");
     parts[1] = next; // replace the leading locale segment

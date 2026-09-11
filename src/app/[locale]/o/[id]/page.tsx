@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getT, isLocale, type Locale } from "@/lib/i18n";
 import { getOrderReceipt } from "@/lib/queries";
+import PendingRefresh from "./PendingRefresh";
 
 export const dynamic = "force-dynamic";
 
@@ -43,10 +44,13 @@ export default async function OrderReceiptPage({
     "activity_title",
     l,
   );
-  const pending = order.status === "pending";
+  const state = order.dispute_status === "open" ? "disputed" : order.status;
+  const pending = state === "pending";
+  const statusKey = `order.${state}Banner`;
 
   return (
     <div className="mx-auto max-w-md px-5 py-10">
+      {pending && <PendingRefresh />}
       <p className="font-mono text-[0.65rem] uppercase tracking-[0.25em] text-signal">
         {activityTitle}
       </p>
@@ -57,10 +61,10 @@ export default async function OrderReceiptPage({
 
       <p
         className={`mt-4 inline-block border px-3 py-1 font-mono text-xs uppercase tracking-widest ${
-          pending ? "border-signal text-signal" : "border-ink text-ink"
+          state === "paid" ? "border-ink text-ink" : "border-signal text-signal"
         }`}
       >
-        {pending ? t("order.pendingBanner") : t("order.paidBanner")}
+        {t(statusKey)}
       </p>
 
       {pending && <p className="mt-3 font-body text-sm text-ink/70">{t("ticket.pendingBody")}</p>}

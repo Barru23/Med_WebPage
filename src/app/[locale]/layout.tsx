@@ -31,7 +31,7 @@ export default async function LocaleLayout({
                 : department.name_ca,
         }))}
       />
-      <main className="flex-1">{children}</main>
+      <main id="main-content" className="flex-1">{children}</main>
       <footer className="border-t border-sand px-5 py-6 font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
         <p>
           {t("brand")} · {t("tagline")}

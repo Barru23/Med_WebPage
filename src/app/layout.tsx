@@ -57,7 +57,15 @@ export default async function RootLayout({
       lang={locale}
       className={`${bodoni.variable} ${permanentMarker.variable} ${archivo.variable} ${jetBrainsMono.variable}`}
     >
-      <body>{children}</body>
+      <body>
+        <a
+          href="#main-content"
+          className="fixed left-2 top-2 z-50 -translate-y-20 bg-bone px-3 py-2 font-mono text-xs focus:translate-y-0"
+        >
+          Salta al contingut
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

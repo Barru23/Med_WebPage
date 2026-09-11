@@ -15,14 +15,17 @@ interface TicketLine {
   answers: Record<string, string>;
 }
 
-function parseOptions(field: Field): string[] {
+function parseOptions(field: Field, locale: Locale): string[] {
   if (!field.options_json) return [];
   try {
     const parsed = JSON.parse(field.options_json) as unknown[];
     return parsed.map((o) =>
       typeof o === "string"
         ? o
-        : ((o as Record<string, string>).ca ?? (o as Record<string, string>).value ?? ""),
+        : ((o as Record<string, string>)[locale] ??
+          (o as Record<string, string>).ca ??
+          (o as Record<string, string>).value ??
+          ""),
     );
   } catch {
     return [];
@@ -36,6 +39,7 @@ export interface CheckoutStrings {
   maxPerOrder: string;
   privacyLink: string;
   serviceFee: string;
+  sensitiveConsent: string;
   subtotal: string;
   termsAccept: string;
   termsLink: string;
@@ -67,6 +71,7 @@ export default function CheckoutForm({
   const [state, formAction] = useActionState<CheckoutState, FormData>(boundAction, null);
 
   const hasFields = fields.length > 0;
+  const hasSensitiveFields = fields.some((field) => field.data_classification !== "standard");
   const buyableVariants = variants.filter((v) => v.avail > 0);
   const uidBase = useId();
 
@@ -97,10 +102,12 @@ export default function CheckoutForm({
   const fee = serviceFeeCents(total);
   const charged = total + fee;
 
+  // Safety ceiling mirrored by the server; an activity may choose a lower cap.
+  const effectiveMax = Math.min(maxPerOrder ?? 100, 100);
   const unitsSoFar = hasFields
     ? lines.length
     : Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
-  const capReached = maxPerOrder !== null && unitsSoFar >= maxPerOrder;
+  const capReached = unitsSoFar >= effectiveMax;
 
   const linesPayload = hasFields
     ? lines.map((l) => ({ variantId: l.variantId, quantity: 1, answers: l.answers }))
@@ -113,7 +120,7 @@ export default function CheckoutForm({
   function roomFor(v: Variant): number {
     const current = quantities[v.id] ?? 0;
     const others = unitsSoFar - current;
-    const ceiling = maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
+    const ceiling = Math.min(v.avail, effectiveMax - others);
     return Math.max(0, ceiling - current);
   }
 
@@ -132,7 +139,7 @@ export default function CheckoutForm({
         (sum, [id, qty]) => (id === v.id ? sum : sum + qty),
         0,
       );
-      const ceiling = maxPerOrder === null ? v.avail : Math.min(v.avail, maxPerOrder - others);
+      const ceiling = Math.min(v.avail, effectiveMax - others);
       return { ...prev, [v.id]: Math.max(0, Math.min(ceiling, absolute ? value : current + value)) };
     });
   }
@@ -205,7 +212,7 @@ export default function CheckoutForm({
                     onClick={() => setLines((prev) => prev.filter((l) => l.uid !== line.uid))}
                     className="font-mono text-[0.65rem] uppercase tracking-widest text-signal"
                   >
-                    Treure
+                    {strings.removeOne}
                   </button>
                 )}
               </div>
@@ -286,7 +293,7 @@ export default function CheckoutForm({
         </div>
       </div>
 
-      {state?.error && <p className="font-mono text-sm text-signal">{state.error}</p>}
+      {state?.error && <p role="alert" className="font-mono text-sm text-signal">{state.error}</p>}
 
       {/* El total final es veu ABANS de clicar, no només a la pantalla de
           pagament: quan el comprador hi arriba ja s'ha compromès. */}
@@ -345,6 +352,18 @@ export default function CheckoutForm({
         </span>
       </label>
 
+      {hasSensitiveFields && (
+        <label className="flex items-start gap-2 font-body text-sm text-ink">
+          <input
+            type="checkbox"
+            name="sensitive_consent"
+            required
+            className="mt-0.5 shrink-0"
+          />
+          <span>{strings.sensitiveConsent}</span>
+        </label>
+      )}
+
       <div className="flex items-center gap-4">
         <SubmitButton className="admin-btn admin-btn-primary text-base" pendingText="Enviant…">
           {strings.buy} · {formatPrice(charged, locale)}
@@ -366,7 +385,7 @@ function FieldInput({
   onChange: (value: string) => void;
 }) {
   const label = pick(field, "label", locale);
-  const options = parseOptions(field);
+  const options = parseOptions(field, locale);
 
   if (field.type === "select") {
     return (

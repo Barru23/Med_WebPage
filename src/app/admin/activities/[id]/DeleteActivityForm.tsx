@@ -23,7 +23,15 @@ export default function DeleteActivityForm({
   }
 
   return (
-    <form action={formAction} className="flex items-center gap-3">
+    <form
+      action={formAction}
+      onSubmit={(event) => {
+        if (!window.confirm("Eliminar definitivament aquesta activitat?")) {
+          event.preventDefault();
+        }
+      }}
+      className="flex items-center gap-3"
+    >
       <input type="hidden" name="id" value={id} />
       <SubmitButton className="admin-btn admin-btn-danger" pendingText="Eliminant…">
         Eliminar activitat

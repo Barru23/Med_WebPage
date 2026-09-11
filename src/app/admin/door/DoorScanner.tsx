@@ -12,6 +12,7 @@ export default function DoorScanner() {
   const rafRef = useRef<number | null>(null);
   const scanningRef = useRef(true);
   const lastCodeRef = useRef<string | null>(null);
+  const lastFrameAtRef = useRef(0);
 
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [resultState, setResultState] = useState<ResultState>(null);
@@ -21,9 +22,12 @@ export default function DoorScanner() {
   const runCheckIn = useCallback(async (code: string) => {
     scanningRef.current = false;
     setPending(true);
-    const result = await checkIn(code);
-    setPending(false);
-    setResultState({ result, at: Date.now() });
+    try {
+      const result = await checkIn(code);
+      setResultState({ result, at: Date.now() });
+    } finally {
+      setPending(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -46,9 +50,15 @@ export default function DoorScanner() {
       const tick = () => {
         const video = videoRef.current;
         const canvas = canvasRef.current;
-        if (video && canvas && scanningRef.current && video.readyState === video.HAVE_ENOUGH_DATA) {
-          canvas.width = video.videoWidth;
-          canvas.height = video.videoHeight;
+        const now = performance.now();
+        if (
+          video && canvas && scanningRef.current &&
+          video.readyState === video.HAVE_ENOUGH_DATA && now - lastFrameAtRef.current >= 125
+        ) {
+          lastFrameAtRef.current = now;
+          const scale = Math.min(1, 640 / Math.max(video.videoWidth, video.videoHeight));
+          canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+          canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
           const ctx = canvas.getContext("2d");
           if (ctx) {
             ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
@@ -83,12 +93,14 @@ export default function DoorScanner() {
     const { result } = resultState;
     const tone = !result.ok ? "bg-signal" : result.already ? "bg-deep" : "bg-ink";
     return (
-      <div className={`flex min-h-[70vh] flex-col items-center justify-center gap-4 ${tone} p-6 text-center text-bone`}>
+      <div aria-live="assertive" className={`flex min-h-[70vh] flex-col items-center justify-center gap-4 ${tone} p-6 text-center text-bone`}>
         <p className="font-mono text-xs uppercase tracking-[0.2em] opacity-80">
           {!result.ok
             ? result.reason === "not_found"
               ? "Codi no trobat"
-              : "Comanda no pagada"
+              : result.reason === "disputed"
+                ? "Pagament en disputa"
+                : "Comanda no pagada"
             : result.already
               ? "Ja s'havia escanejat"
               : "Entrada vàlida"}
@@ -118,13 +130,13 @@ export default function DoorScanner() {
         <video ref={videoRef} className="h-full w-full object-cover" playsInline muted />
         <canvas ref={canvasRef} className="hidden" />
         {pending && (
-          <div className="absolute inset-0 flex items-center justify-center bg-ink/60 font-mono text-sm text-bone">
+          <div aria-live="polite" className="absolute inset-0 flex items-center justify-center bg-ink/60 font-mono text-sm text-bone">
             Comprovant…
           </div>
         )}
       </div>
 
-      {cameraError && <p className="text-center font-mono text-xs text-signal">{cameraError}</p>}
+      {cameraError && <p role="alert" className="text-center font-mono text-xs text-signal">{cameraError}</p>}
 
       <form
         onSubmit={(e) => {

@@ -44,6 +44,7 @@
     "termsAccept": "I accept the {terms} and the {privacy}.",
     "termsLink": "terms of sale",
     "privacyLink": "privacy policy",
+    "sensitiveConsent": "I explicitly consent to the processing of the sensitive data provided to organise this activity.",
     "addOne": "Add one",
     "removeOne": "Remove one"
   },
@@ -57,6 +58,9 @@
     "pendingBody": "We've reserved your place. You'll get your ticket once payment is confirmed — check back on this page later.",
     "notFound": "This ticket doesn't exist.",
     "checkedInAt": "Used",
+    "cancelled": "Cancelled",
+    "refunded": "Refunded",
+    "disputed": "Ticket blocked",
     "buyer": "Buyer",
     "code": "Code"
   },
@@ -64,6 +68,9 @@
     "title": "Your order",
     "pendingBanner": "Payment pending",
     "paidBanner": "Paid",
+    "cancelledBanner": "Cancelled",
+    "refundedBanner": "Refunded",
+    "disputedBanner": "Payment disputed",
     "notFound": "This order doesn't exist.",
     "viewTicket": "View ticket",
     "tickets": "Tickets"

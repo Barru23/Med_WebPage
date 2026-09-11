@@ -44,6 +44,7 @@
     "termsAccept": "Accepto les {terms} i la {privacy}.",
     "termsLink": "condicions de compra",
     "privacyLink": "política de privacitat",
+    "sensitiveConsent": "Accepto explícitament el tractament de les dades sensibles indicades per organitzar aquesta activitat.",
     "addOne": "Afegeix-ne una",
     "removeOne": "Treu-ne una"
   },
@@ -57,6 +58,9 @@
     "pendingBody": "Hem reservat la teva plaça. Rebràs l'entrada quan es confirmi el pagament — torna a aquesta pàgina més tard.",
     "notFound": "Aquesta entrada no existeix.",
     "checkedInAt": "Utilitzada",
+    "cancelled": "Cancel·lada",
+    "refunded": "Reemborsada",
+    "disputed": "Entrada bloquejada",
     "buyer": "Comprador",
     "code": "Codi"
   },
@@ -64,6 +68,9 @@
     "title": "La teva comanda",
     "pendingBanner": "Pendent de pagament",
     "paidBanner": "Pagat",
+    "cancelledBanner": "Cancel·lat",
+    "refundedBanner": "Reemborsat",
+    "disputedBanner": "Pagament en disputa",
     "notFound": "Aquesta comanda no existeix.",
     "viewTicket": "Veure entrada",
     "tickets": "Entrades"

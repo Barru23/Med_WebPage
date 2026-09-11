@@ -1,7 +1,13 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { isLocale } from "@/lib/i18n";
-import { LEGAL_NAV, getLegalDoc } from "@/lib/legal";
+import {
+  LEGAL_NAV,
+  LEGAL_PLACEHOLDER_CONTROLLER,
+  LEGAL_PLACEHOLDER_EMAIL,
+  getLegalDoc,
+} from "@/lib/legal";
+import { getLegalIdentity } from "@/lib/legalConfig";
 
 // Rendered per request like every other page here. Prerendering this one meant
 // building it without a [locale] to pair each [doc] with, which worked in dev
@@ -27,6 +33,17 @@ export default async function LegalPage({
   if (!isLocale(locale)) notFound();
   const found = getLegalDoc(doc);
   if (!found) notFound();
+  const identity = await getLegalIdentity();
+  const legalText = (value: string) =>
+    value
+      .replaceAll(
+        LEGAL_PLACEHOLDER_CONTROLLER,
+        identity.ready ? identity.name : LEGAL_PLACEHOLDER_CONTROLLER,
+      )
+      .replaceAll(
+        LEGAL_PLACEHOLDER_EMAIL,
+        identity.ready ? identity.email : LEGAL_PLACEHOLDER_EMAIL,
+      );
 
   return (
     <div className="mx-auto max-w-2xl px-5 py-10">
@@ -51,6 +68,13 @@ export default async function LegalPage({
         {found.title}
       </h1>
 
+      {identity.ready && (doc === "avis-legal" || doc === "privacitat") && (
+        <dl className="mt-4 border border-sand p-4 font-mono text-xs">
+          <div><dt className="inline font-semibold">Responsable: </dt><dd className="inline">{identity.name}</dd></div>
+          <div><dt className="inline font-semibold">Contacte: </dt><dd className="inline">{identity.email}</dd></div>
+        </dl>
+      )}
+
       {found.intro && (
         <p className="mt-3 font-body text-base leading-relaxed text-ink/70">{found.intro}</p>
       )}
@@ -63,7 +87,7 @@ export default async function LegalPage({
           <div className="mt-2 flex flex-col gap-3">
             {section.body.map((paragraph, i) => (
               <p key={i} className="font-body text-[0.95rem] leading-relaxed text-ink">
-                {paragraph}
+                {legalText(paragraph)}
               </p>
             ))}
           </div>

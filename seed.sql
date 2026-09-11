@@ -78,3 +78,38 @@ INSERT OR IGNORE INTO variant (id, activity_id, name_ca, price_cents, stock, pos
   ('var_dessuadora_m', 'act_dessuadora', 'Talla M', 2500, 20, 1),
   ('var_dessuadora_l', 'act_dessuadora', 'Talla L', 2500, 20, 2),
   ('var_dessuadora_xl','act_dessuadora', 'Talla XL',2500, 20, 3);
+
+-- ===========================================================================
+-- Edicions (esquema 0010+) i classificació de dades (0013+)
+-- ===========================================================================
+-- El seed s'executa després de les migracions. Cada activitat necessita una
+-- edició actual amb data final perquè la retenció es pugui calcular.
+INSERT OR IGNORE INTO activity_edition
+  (id, activity_id, label, ends_at, location, published) VALUES
+  ('ed_medifutbol_2026',       'act_medifutbol',       'Tardor 2026', '2026-12-31 23:59:59', NULL, 1),
+  ('ed_medipadel_2026',        'act_medipadel',        'Tardor 2026', '2026-12-31 23:59:59', NULL, 1),
+  ('ed_mediportaventura_2026', 'act_mediportaventura', 'Tardor 2026', '2026-12-31 23:59:59', 'PortAventura World', 1),
+  ('ed_mirona_2026',           'act_mirona_run',       'Tardor 2026', '2026-12-31 23:59:59', NULL, 1),
+  ('ed_medigala_2026',         'act_medigala',         'Tardor 2026', '2026-12-31 23:59:59', NULL, 1),
+  ('ed_inici_curs_2026',       'act_inici_curs',       'Tardor 2026', '2026-12-31 23:59:59', NULL, 1),
+  ('ed_dessuadora_2026',       'act_dessuadora',       'Tardor 2026', '2026-12-31 23:59:59', NULL, 1);
+
+UPDATE activity SET current_edition_id = 'ed_medifutbol_2026' WHERE id = 'act_medifutbol';
+UPDATE activity SET current_edition_id = 'ed_medipadel_2026' WHERE id = 'act_medipadel';
+UPDATE activity SET current_edition_id = 'ed_mediportaventura_2026' WHERE id = 'act_mediportaventura';
+UPDATE activity SET current_edition_id = 'ed_mirona_2026' WHERE id = 'act_mirona_run';
+UPDATE activity SET current_edition_id = 'ed_medigala_2026' WHERE id = 'act_medigala';
+UPDATE activity SET current_edition_id = 'ed_inici_curs_2026' WHERE id = 'act_inici_curs';
+UPDATE activity SET current_edition_id = 'ed_dessuadora_2026' WHERE id = 'act_dessuadora';
+
+UPDATE variant SET edition_id = 'ed_medifutbol_2026' WHERE activity_id = 'act_medifutbol';
+UPDATE variant SET edition_id = 'ed_medipadel_2026' WHERE activity_id = 'act_medipadel';
+UPDATE variant SET edition_id = 'ed_mediportaventura_2026' WHERE activity_id = 'act_mediportaventura';
+UPDATE variant SET edition_id = 'ed_mirona_2026' WHERE activity_id = 'act_mirona_run';
+UPDATE variant SET edition_id = 'ed_medigala_2026' WHERE activity_id = 'act_medigala';
+UPDATE variant SET edition_id = 'ed_inici_curs_2026' WHERE activity_id = 'act_inici_curs';
+UPDATE variant SET edition_id = 'ed_dessuadora_2026' WHERE activity_id = 'act_dessuadora';
+
+UPDATE field SET data_classification = 'identity'
+ WHERE id IN ('fld_mpv_dni', 'fld_mpv_emergency');
+UPDATE field SET data_classification = 'health' WHERE id = 'fld_mpv_allergies';

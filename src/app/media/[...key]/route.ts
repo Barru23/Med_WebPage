@@ -14,8 +14,16 @@ export async function GET(
 
   const headers = new Headers();
   object.writeHttpMetadata(headers);
+  const safeTypes = new Set(["image/jpeg", "image/png", "image/webp"]);
+  const storedType = headers.get("content-type") ?? "";
+  if (!safeTypes.has(storedType)) {
+    headers.set("content-type", "application/octet-stream");
+    headers.set("content-disposition", "attachment");
+  }
   headers.set("cache-control", "public, max-age=31536000, immutable");
   headers.set("etag", object.httpEtag);
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("content-security-policy", "default-src 'none'; sandbox");
 
   return new NextResponse(object.body, { headers });
 }

@@ -4,6 +4,8 @@
  * Fa dues coses en una sola crida des del webhook de Stripe:
  *   1. afegeix una fila al full per cada entrada de la comanda,
  *   2. envia el correu amb els codis al comprador.
+ * També inclou un trigger diari de retenció; executeu
+ * installDailyMaintenance() una vegada després de desplegar-lo.
  *
  * UNA PESTANYA PER ACTIVITAT I EDICIÓ, per exemple "Medifutbol — Tardor 2026".
  * L'edició hi és a posta: Medifutbol i Medipadel es reobren cada temporada
@@ -54,32 +56,192 @@ function doPost(e) {
       return json({ ok: false, error: 'falta order_id' });
     }
 
-    var full = obtenirPestanya(dades);
+    var canals = Array.isArray(dades.channels) ? dades.channels : ['sheet', 'email'];
+    var resultatFull = { sent: false, skipped: canals.indexOf('sheet') === -1 };
+    var resultatCorreu = { sent: false, skipped: canals.indexOf('email') === -1 };
+    var full = null;
 
-    // Idempotència: si la comanda ja hi és, no fem res i responem OK perquè
-    // Stripe deixi de reintentar.
-    if (jaHiEs(full, dades.order_id)) {
-      return json({ ok: true, duplicat: true });
+    if (canals.indexOf('sheet') !== -1) {
+      full = obtenirPestanya(dades);
+      var duplicat = jaHiEs(full, dades.order_id);
+      if (!duplicat) escriureFiles(full, dades);
+      registrarMetadadesRetencio(full, dades);
+      resultatFull = { sent: true, duplicate: duplicat };
     }
 
-    escriureFiles(full, dades);
-
-    // El correu va DESPRÉS de les files. Si el correu falla (quota de Gmail
-    // exhaurida, per exemple) el llistat ja hi és, que és el que fa falta per a
-    // l'organització. El comprador sempre té el codi a la pantalla.
-    var correuEnviat = false;
-    try {
-      correuEnviat = enviarCorreu(dades);
-    } catch (err) {
-      console.error('correu fallit per ' + dades.order_id + ': ' + err);
+    if (canals.indexOf('email') !== -1) {
+      var registre = obtenirRegistreRelay();
+      if (emailJaEnviat(registre, dades.order_id)) {
+        resultatCorreu = { sent: true, duplicate: true };
+      } else {
+        try {
+          var enviat = enviarCorreu(dades);
+          if (enviat) marcarEmailEnviat(registre, dades.order_id);
+          resultatCorreu = { sent: enviat };
+        } catch (err) {
+          console.error('correu fallit per ' + dades.order_id + ': ' + err);
+          resultatCorreu = { sent: false, error: String(err) };
+        }
+      }
     }
 
-    return json({ ok: true, pestanya: full.getName(), correu: correuEnviat });
+    return json({
+      ok: true,
+      sheet: resultatFull,
+      email: resultatCorreu,
+      // Compatibility for an old worker or a human running the test function.
+      pestanya: full ? full.getName() : '',
+      correu: resultatCorreu.sent,
+      duplicat: Boolean(resultatFull.duplicate && resultatCorreu.duplicate),
+    });
   } catch (err) {
     console.error(err);
     return json({ ok: false, error: String(err) });
   } finally {
     lock.releaseLock();
+  }
+}
+
+// A private delivery ledger decouples email retries from sheet idempotency.
+// Marking happens only after MailApp succeeds, so a failed email can be retried
+// without duplicating participant rows.
+function obtenirRegistreRelay() {
+  var doc = SpreadsheetApp.getActiveSpreadsheet();
+  var full = doc.getSheetByName('_relay_log');
+  if (!full) {
+    full = doc.insertSheet('_relay_log');
+    full.appendRow(['order_id', 'email_sent_at']);
+    if (typeof full.hideSheet === 'function') full.hideSheet();
+  }
+  return full;
+}
+
+function emailJaEnviat(full, orderId) {
+  var ultima = full.getLastRow();
+  if (ultima < 2) return false;
+  var ids = full.getRange(2, 1, ultima - 1, 1).getValues();
+  for (var i = 0; i < ids.length; i++) {
+    if (ids[i][0] === orderId) return true;
+  }
+  return false;
+}
+
+function marcarEmailEnviat(full, orderId) {
+  ferLloc(full, 2, 1);
+  full.appendRow([orderId, new Date().toISOString()]);
+}
+
+// ---------------------------------------------------------------------------
+// Retenció de dades de les còpies de Google Sheets
+// ---------------------------------------------------------------------------
+
+function obtenirRegistreRetencio() {
+  var doc = SpreadsheetApp.getActiveSpreadsheet();
+  var full = doc.getSheetByName('_relay_meta');
+  if (!full) {
+    full = doc.insertSheet('_relay_meta');
+    full.appendRow(['sheet_id', 'sheet_name', 'edition_ends_at', 'sensitive_columns', 'updated_at']);
+    if (typeof full.hideSheet === 'function') full.hideSheet();
+  }
+  return full;
+}
+
+function registrarMetadadesRetencio(full, dades) {
+  if (!dades.edition_ends_at) return;
+  var classificacions = dades.field_classifications || {};
+  var sensibles = Object.keys(classificacions).filter(function (etiqueta) {
+    return classificacions[etiqueta] === 'identity' || classificacions[etiqueta] === 'health';
+  });
+  var registre = obtenirRegistreRetencio();
+  var sheetId = full.getSheetId();
+  var ultima = registre.getLastRow();
+  var fila = 0;
+  if (ultima >= 2) {
+    var ids = registre.getRange(2, 1, ultima - 1, 1).getValues();
+    for (var i = 0; i < ids.length; i++) {
+      if (Number(ids[i][0]) === sheetId) {
+        fila = i + 2;
+        break;
+      }
+    }
+  }
+  if (fila) {
+    try {
+      var anteriors = JSON.parse(String(registre.getRange(fila, 4, 1, 1).getValues()[0][0] || '[]'));
+      if (Array.isArray(anteriors)) {
+        anteriors.forEach(function (etiqueta) {
+          if (sensibles.indexOf(etiqueta) === -1) sensibles.push(etiqueta);
+        });
+      }
+    } catch (err) {
+      // Un registre malmès es reconstrueix amb les metadades de la comanda actual.
+    }
+  }
+  var valors = [
+    sheetId,
+    full.getName(),
+    dades.edition_ends_at,
+    JSON.stringify(sensibles),
+    new Date().toISOString(),
+  ];
+  if (fila) registre.getRange(fila, 1, 1, valors.length).setValues([valors]);
+  else {
+    ferLloc(registre, valors.length, 1);
+    registre.appendRow(valors);
+  }
+}
+
+/** Executa aquesta funció una vegada després de desplegar l'script. */
+function installDailyMaintenance() {
+  var existeix = ScriptApp.getProjectTriggers().some(function (trigger) {
+    return trigger.getHandlerFunction() === 'runRetentionCleanup';
+  });
+  if (!existeix) {
+    ScriptApp.newTrigger('runRetentionCleanup').timeBased().everyDays(1).atHour(3).create();
+  }
+}
+
+/** Elimina camps sensibles al cap de 24 h i la còpia sencera al cap de 12 mesos. */
+function runRetentionCleanup() {
+  var doc = SpreadsheetApp.getActiveSpreadsheet();
+  var registre = doc.getSheetByName('_relay_meta');
+  if (!registre || registre.getLastRow() < 2) return;
+  var files = registre.getRange(2, 1, registre.getLastRow() - 1, 5).getValues();
+  var ara = new Date();
+
+  for (var i = files.length - 1; i >= 0; i--) {
+    var dataFinal = new Date(files[i][2]);
+    if (isNaN(dataFinal.getTime())) continue;
+    var full = doc.getSheetById(Number(files[i][0]));
+    if (!full) {
+      registre.deleteRow(i + 2);
+      continue;
+    }
+
+    var dotzeMesos = new Date(dataFinal.getTime());
+    dotzeMesos.setUTCMonth(dotzeMesos.getUTCMonth() + 12);
+    if (ara >= dotzeMesos) {
+      doc.deleteSheet(full);
+      registre.deleteRow(i + 2);
+      continue;
+    }
+
+    if (ara.getTime() < dataFinal.getTime() + 24 * 60 * 60 * 1000) continue;
+    var sensibles;
+    try {
+      sensibles = JSON.parse(String(files[i][3] || '[]'));
+    } catch (err) {
+      sensibles = [];
+    }
+    if (!Array.isArray(sensibles) || !sensibles.length || full.getLastRow() < 2) continue;
+    var capcalera = full.getRange(1, 1, 1, full.getLastColumn()).getValues()[0].map(String);
+    sensibles.forEach(function (etiqueta) {
+      var columna = capcalera.indexOf(etiqueta);
+      if (columna !== -1) {
+        full.getRange(2, columna + 1, full.getLastRow() - 1, 1).clearContent();
+      }
+    });
+    registre.getRange(i + 2, 4).setValue('[]');
   }
 }
 
@@ -223,6 +385,30 @@ function jaHiEs(full, orderId) {
 // Correu
 // ---------------------------------------------------------------------------
 
+function textosCorreu(locale) {
+  if (locale === 'es') return {
+    oneSubject: 'Tu entrada para ', manySubject: 'Tus entradas para ',
+    view: 'Ver la entrada', hello: 'Hola ', readyOne: ', ya tienes tu entrada.',
+    readyMany: ', ya tienes tus entradas.',
+    instructions: 'Enseña el código en la entrada. Haz una captura de pantalla para tenerlo incluso sin cobertura.',
+    order: 'Pedido ',
+  };
+  if (locale === 'en') return {
+    oneSubject: 'Your ticket for ', manySubject: 'Your tickets for ',
+    view: 'View ticket', hello: 'Hello ', readyOne: ', your ticket is ready.',
+    readyMany: ', your tickets are ready.',
+    instructions: 'Show the code at the door. Take a screenshot so you still have it without reception.',
+    order: 'Order ',
+  };
+  return {
+    oneSubject: 'La teva entrada per ', manySubject: 'Les teves entrades per ',
+    view: "Veure l'entrada", hello: 'Hola ', readyOne: ', ja tens la teva entrada.',
+    readyMany: ', ja tens les teves entrades.',
+    instructions: "Ensenya el codi a l'entrada. Fes-ne una captura de pantalla: així el tindràs encara que et quedis sense cobertura.",
+    order: 'Comanda ',
+  };
+}
+
 function enviarCorreu(dades) {
   if (!dades.buyer_email) return false;
 
@@ -231,10 +417,12 @@ function enviarCorreu(dades) {
   });
   if (!codis.length) return false;
 
+  var text = textosCorreu(dades.locale || 'ca');
+  var activitat = dades.activity_display || dades.activity;
   var assumpte =
     codis.length === 1
-      ? 'La teva entrada per ' + dades.activity + ': ' + codis[0]
-      : 'Les teves ' + codis.length + ' entrades per ' + dades.activity;
+      ? text.oneSubject + activitat + ': ' + codis[0]
+      : text.manySubject + activitat + ' (' + codis.length + ')';
 
   var blocs = (dades.items || [])
     .map(function (item) {
@@ -249,7 +437,7 @@ function enviarCorreu(dades) {
         '<a href="' +
         dades.ticket_url_base +
         item.ticket_code +
-        '" style="font:12px sans-serif;color:#E1281C">Veure l\'entrada</a>' +
+        '" style="font:12px sans-serif;color:#E1281C">' + text.view + '</a>' +
         '</div>'
       );
     })
@@ -259,20 +447,18 @@ function enviarCorreu(dades) {
     '<div style="max-width:520px;margin:0 auto;font-family:Helvetica,Arial,sans-serif;color:#141414;background:#F2E7D8;padding:24px">' +
     '<h1 style="font:700 26px/1.2 Georgia,serif;margin:0 0 4px">XIVARRI</h1>' +
     '<p style="font:13px/1.5 sans-serif;color:#555;margin:0 0 18px">' +
-    escapar(dades.activity) +
+    escapar(activitat) +
     (dades.edition ? ' · ' + escapar(dades.edition) : '') +
     '</p>' +
-    '<p style="font:15px/1.5 sans-serif">Hola ' +
+    '<p style="font:15px/1.5 sans-serif">' + text.hello +
     escapar(dades.buyer_name) +
-    ', ja tens ' +
-    (codis.length === 1 ? 'la teva entrada' : 'les teves entrades') +
-    '.</p>' +
+    (codis.length === 1 ? text.readyOne : text.readyMany) +
+    '</p>' +
     blocs +
     '<p style="font:13px/1.5 sans-serif;color:#555">' +
-    'Ensenya el codi a l\'entrada. Fes-ne una captura de pantalla: així el tindràs ' +
-    'encara que et quedis sense cobertura.</p>' +
+    text.instructions + '</p>' +
     '<p style="font:11px/1.5 sans-serif;color:#888;border-top:1px solid #DCCDB8;padding-top:12px">' +
-    'Comanda ' +
+    text.order +
     escapar(dades.order_id) +
     ' · ' +
     dades.total_eur +

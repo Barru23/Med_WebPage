@@ -70,6 +70,22 @@ export default function FieldEditor({
               />
               <span className="font-mono text-xs">Obligatori</span>
             </label>
+            <label className="block sm:col-span-2">
+              <span className="admin-label">Dades</span>
+              <select
+                className="admin-select"
+                value={f.data_classification}
+                onChange={(e) =>
+                  update(i, {
+                    data_classification: e.target.value as FieldDraft["data_classification"],
+                  })
+                }
+              >
+                <option value="standard">Ordinàries</option>
+                <option value="identity">Identitat / DNI</option>
+                <option value="health">Salut / al·lèrgies</option>
+              </select>
+            </label>
             <button
               type="button"
               onClick={() => remove(i)}
@@ -79,16 +95,24 @@ export default function FieldEditor({
             </button>
           </div>
           {(f.type === "select" || f.type === "checkbox") && (
-            <label className="block">
-              <span className="admin-label">Opcions (una per línia)</span>
-              <textarea
-                className="admin-textarea"
-                rows={3}
-                value={f.options}
-                onChange={(e) => update(i, { options: e.target.value })}
-                placeholder={"Girona\nFigueres\nBarcelona"}
-              />
-            </label>
+            <div className="grid gap-2 sm:grid-cols-3">
+              {([
+                ["options", "Opcions CA"],
+                ["options_es", "Opcions ES"],
+                ["options_en", "Opcions EN"],
+              ] as const).map(([key, label]) => (
+                <label className="block" key={key}>
+                  <span className="admin-label">{label} (una per línia)</span>
+                  <textarea
+                    className="admin-textarea"
+                    rows={3}
+                    value={f[key]}
+                    onChange={(e) => update(i, { [key]: e.target.value })}
+                    placeholder={"Girona\nFigueres\nBarcelona"}
+                  />
+                </label>
+              ))}
+            </div>
           )}
         </div>
       ))}

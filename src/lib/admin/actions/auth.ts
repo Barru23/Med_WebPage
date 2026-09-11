@@ -4,8 +4,7 @@ import { redirect } from "next/navigation";
 import { passwordMatches, startSession, endSession } from "@/lib/auth";
 import {
   clientIp,
-  isRateLimited,
-  recordFailedAttempt,
+  consumeLoginAttempt,
   clearAttempts,
 } from "@/lib/loginRate";
 
@@ -16,12 +15,11 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!password) return { error: "Escriu la contrasenya." };
 
   const ip = await clientIp();
-  if (await isRateLimited(ip)) {
+  if (await consumeLoginAttempt(ip)) {
     return { error: "Massa intents. Espera un quart d'hora i torna-ho a provar." };
   }
 
   if (!(await passwordMatches(password))) {
-    await recordFailedAttempt(ip);
     // Deliberately vague: never say whether a password is configured at all.
     return { error: "Contrasenya incorrecta." };
   }

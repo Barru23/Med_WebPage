@@ -2,11 +2,14 @@
   "name": "xivarri",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit --incremental false",
+    "test:e2e": "playwright test",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
     "deploy": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
     "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts",
@@ -27,11 +30,14 @@
   },
   "devDependencies": {
     "@opennextjs/cloudflare": "^1.20.6",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/postcss": "4.3.3",
     "@types/node": "^22",
     "@types/qrcode": "1.5.6",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.4",
     "tailwindcss": "4.3.3",
     "typescript": "^5",
     "wrangler": "4.125.0"
@@ -39,6 +45,11 @@
   "allowScripts": {
     "esbuild@0.25.4": true,
     "esbuild@0.28.1": true,
-    "workerd@1.20260820.1": true
+    "workerd@1.20260820.1": true,
+    "unrs-resolver@1.12.2": true
+  },
+  "overrides": {
+    "sharp": "0.35.4",
+    "uuid": "11.1.1"
   }
 }

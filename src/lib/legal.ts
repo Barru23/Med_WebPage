@@ -1,19 +1,14 @@
 /**
  * Textos legals del web.
  *
- * ⚠️ QUI VEN ÉS EL COL·LECTIU, NO CAP PERSONA CONCRETA. Per decisió de
- * l'organització aquestes pàgines no publiquen cap nom particular, ni DNI, ni
- * adreça, ni telèfon: el correu compartit de la promoció és l'únic canal de
- * contacte. Cap fitxer del projecte ha de donar per fet un nom concret
- * (CLAUDE.md §9).
- *
  * ⚠️ AQUESTS TEXTOS ELS HA DE REVISAR ALGÚ QUE HI ENTENGUI abans del
  * llançament. Són un esborrany honest i complet del que normalment demana una
  * venda a distància, no un dictamen. El punt més delicat és el dret de
  * desistiment, que NO funciona igual per a una entrada amb data fixada que per
  * al marxandatge — vegeu el document de devolucions.
  *
- * Es publiquen només en català, com la resta de contingut (CLAUDE.md §5).
+ * El nom i el correu públics es carreguen des de la configuració i el checkout
+ * queda bloquejat fora de local mentre en falti algun.
  */
 
 export interface LegalSection {
@@ -37,8 +32,11 @@ export const LEGAL_NAV: Array<{ slug: string; label: string }> = [
   { slug: "cookies", label: "Cookies" },
 ];
 
-const TITULAR = "els estudiants de la 14a promoció de Medicina de la Universitat de Girona";
-const CORREU = "promocio14medicinaudg@gmail.com";
+export const LEGAL_PLACEHOLDER_CONTROLLER =
+  "els estudiants de la 14a promoció de Medicina de la Universitat de Girona";
+export const LEGAL_PLACEHOLDER_EMAIL = "promocio14medicinaudg@gmail.com";
+const TITULAR = LEGAL_PLACEHOLDER_CONTROLLER;
+const CORREU = LEGAL_PLACEHOLDER_EMAIL;
 
 /**
  * Mesos que es conserven les dades d'un participant després de l'activitat.
@@ -49,7 +47,7 @@ const CORREU = "promocio14medicinaudg@gmail.com";
  * — s'esborren en acabar l'activitat — i el registre comptable de les vendes
  * viu a Stripe amb els seus propis terminis.
  *
- * No hi ha cap procés que ho faci sol: és una neteja que algú ha de fer.
+ * L'endpoint diari /api/maintenance aplica aquests terminis a D1.
  */
 const MESOS_CONSERVACIO = "12";
 

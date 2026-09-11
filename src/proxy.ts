@@ -13,10 +13,10 @@ function preferredLocale(req: NextRequest): string {
   return defaultLocale;
 }
 
-async function adminPassword(): Promise<string | undefined> {
+async function adminSessionSecret(): Promise<string | undefined> {
   try {
     const { env } = await getCloudflareContext({ async: true });
-    return env.ADMIN_PASSWORD;
+    return env.ADMIN_SESSION_SECRET;
   } catch {
     return undefined;
   }
@@ -34,7 +34,7 @@ export async function proxy(req: NextRequest) {
   if (isAdminPath) {
     const authorised = await verifySessionToken(
       req.cookies.get(ADMIN_COOKIE)?.value,
-      await adminPassword(),
+      await adminSessionSecret(),
     );
     if (!authorised) {
       // Rewrite, not redirect: the address bar keeps the page they asked for,

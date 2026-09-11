@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { getAdminActivity, listAllDepartments } from "@/lib/admin/queries";
-import { duplicateActivity, setActivityArchived } from "@/lib/admin/actions/activities";
+import { createActivityEdition } from "@/lib/admin/actions/activities";
 import ActivityForm from "../ActivityForm";
 import DeleteActivityForm from "./DeleteActivityForm";
 import type {
@@ -10,6 +10,7 @@ import type {
 } from "@/lib/admin/activityForm";
 import { centsToEuros, toInputDatetime } from "@/lib/admin/activityForm";
 import { requireAdminPage } from "@/lib/auth";
+import ActivityActions from "./ActivityActions";
 
 export const dynamic = "force-dynamic";
 
@@ -41,12 +42,16 @@ export default async function EditActivityPage({
 
   const initialFields: FieldDraft[] = fields.map((f) => {
     let options = "";
+    let optionsEs = "";
+    let optionsEn = "";
     if (f.options_json) {
       try {
         const parsed = JSON.parse(f.options_json);
-        options = Array.isArray(parsed)
-          ? parsed.map((o) => (typeof o === "string" ? o : o.ca ?? o.value ?? "")).join("\n")
-          : "";
+        if (Array.isArray(parsed)) {
+          options = parsed.map((o) => (typeof o === "string" ? o : o.ca ?? o.value ?? "")).join("\n");
+          optionsEs = parsed.map((o) => (typeof o === "string" ? "" : o.es ?? "")).join("\n");
+          optionsEn = parsed.map((o) => (typeof o === "string" ? "" : o.en ?? "")).join("\n");
+        }
       } catch {
         options = "";
       }
@@ -58,7 +63,10 @@ export default async function EditActivityPage({
       label_en: f.label_en ?? "",
       type: f.type as FieldDraft["type"],
       options,
+      options_es: optionsEs,
+      options_en: optionsEn,
       required: f.required === 1,
+      data_classification: f.data_classification,
     };
   });
 
@@ -80,18 +88,7 @@ export default async function EditActivityPage({
     <div className="mx-auto max-w-3xl">
       <div className="flex items-center justify-between">
         <h1 className="font-display text-3xl tracking-tight">{activity.title_ca}</h1>
-        <div className="flex gap-2">
-          <form action={setActivityArchived.bind(null, activity.id, activity.archived !== 1)}>
-            <button type="submit" className={activity.archived === 1 ? "admin-btn text-sm" : "admin-btn admin-btn-danger text-sm"}>
-              {activity.archived === 1 ? "Restaurar" : "Arxivar"}
-            </button>
-          </form>
-          <form action={duplicateActivity.bind(null, activity.id)}>
-            <button type="submit" className="admin-btn text-sm">
-              Duplicar
-            </button>
-          </form>
-        </div>
+        <ActivityActions id={activity.id} archived={activity.archived === 1} />
       </div>
 
       <div className="mt-6">
@@ -108,6 +105,29 @@ export default async function EditActivityPage({
           initialSizeGuide={initialSizeGuide}
         />
       </div>
+
+      <form
+        action={createActivityEdition}
+        className="mt-10 flex flex-col gap-2 border-t border-sand pt-4 sm:flex-row sm:items-end"
+      >
+        <input type="hidden" name="activity_id" value={activity.id} />
+        <label className="block flex-1">
+          <span className="admin-label">Nova edició</span>
+          <input
+            className="admin-input"
+            name="edition_label"
+            placeholder="Primavera 2027"
+            required
+          />
+        </label>
+        <button
+          type="submit"
+          className="admin-btn"
+          title="Copia les modalitats i crea un inventari nou sense publicar-lo"
+        >
+          Crear i activar edició
+        </button>
+      </form>
 
       <div className="mt-10 border-t border-sand pt-4">
         <DeleteActivityForm id={activity.id} orderCount={activity.order_count} />

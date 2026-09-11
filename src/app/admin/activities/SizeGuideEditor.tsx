@@ -45,7 +45,7 @@ export default function SizeGuideEditor({
         )}
         <label className="block">
           <span className="admin-label">Imatge de referència (opcional)</span>
-          <input type="file" name="size_guide_image" accept="image/*" className="text-sm" />
+          <input type="file" name="size_guide_image" accept="image/jpeg,image/png,image/webp" className="text-sm" />
         </label>
       </div>
     </div>

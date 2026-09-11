@@ -41,6 +41,7 @@ export default async function HomePage({
             slug: department.slug,
             name: pick(department, "name", l),
             openCount: department.open_count,
+            photoUrl: department.photo_url,
           }))}
           noOpenActivities={t("home.noOpenActivities")}
         />

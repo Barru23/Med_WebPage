@@ -23,7 +23,10 @@ export interface FieldDraft {
   label_en: string;
   type: "text" | "number" | "select" | "checkbox";
   options: string; // newline-separated plain labels, only used for select/checkbox
+  options_es: string;
+  options_en: string;
   required: boolean;
+  data_classification: "standard" | "identity" | "health";
 }
 
 export interface ActivityImageDraft {
@@ -62,7 +65,10 @@ export function emptyField(): FieldDraft {
     label_en: "",
     type: "text",
     options: "",
+    options_es: "",
+    options_en: "",
     required: false,
+    data_classification: "standard",
   };
 }
 

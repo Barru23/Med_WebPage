@@ -35,7 +35,7 @@ export default function AddDepartmentForm() {
       </label>
       <label className="block">
         <span className="admin-label">Foto</span>
-        <input type="file" name="photo" accept="image/*" className="text-sm" />
+        <input type="file" name="photo" accept="image/jpeg,image/png,image/webp" className="text-sm" />
       </label>
       {state?.error && <p className="font-mono text-xs text-signal">{state.error}</p>}
       <SubmitButton pendingText="Afegint…">Afegir departament</SubmitButton>

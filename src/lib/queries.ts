@@ -1,7 +1,7 @@
 import { getDb } from "@/lib/db";
 import {
+  AVAIL_EXPR,
   BUYABLE_AVAIL_EXPR,
-  HELD_BY_STRIPE,
   ON_SALE_EXPR,
 } from "@/lib/availability";
 
@@ -10,7 +10,7 @@ import {
 // kept as one SQL fragment for consistency.
 const AVAILABLE = `
   ${ON_SALE_EXPR}
-  AND (v.stock - v.sold - ${HELD_BY_STRIPE}) > 0
+  AND ${AVAIL_EXPR} > 0
 `;
 
 // Below this remaining count we flag "últimes places".
@@ -76,6 +76,7 @@ export interface Field {
   type: string;
   options_json: string | null;
   required: number;
+  data_classification: "standard" | "identity" | "health";
 }
 
 export interface ActivityImage {
@@ -94,6 +95,7 @@ export interface SizeGuideRow {
 export interface ActivityPage {
   activity: {
     id: string;
+    edition_id: string;
     slug: string;
     type: string;
     title_ca: string;
@@ -127,8 +129,11 @@ export async function listDepartments(): Promise<DepartmentTile[]> {
     .prepare(
       `SELECT d.id, d.slug, d.name_ca, d.name_es, d.name_en, d.photo_url,
         (SELECT COUNT(DISTINCT a.id)
-           FROM activity a JOIN variant v ON v.activity_id = a.id
-          WHERE a.department_id = d.id AND a.published = 1 AND a.archived = 0 AND ${AVAILABLE}
+           FROM activity a
+           JOIN activity_edition ae ON ae.id = a.current_edition_id
+           JOIN variant v ON v.edition_id = ae.id
+          WHERE a.department_id = d.id AND ae.published = 1
+            AND ae.ends_at IS NOT NULL AND a.archived = 0 AND ${AVAILABLE}
         ) AS open_count
        FROM department d
        ORDER BY d.position, d.name_ca`,
@@ -143,9 +148,12 @@ export async function listOnSale(): Promise<OnSaleItem[]> {
   const { results } = await db
     .prepare(
       `SELECT DISTINCT a.slug, a.type, a.title_ca, a.title_es, a.title_en
-         FROM activity a JOIN variant v ON v.activity_id = a.id
-        WHERE a.published = 1 AND a.archived = 0 AND ${AVAILABLE}
-        ORDER BY (a.starts_at IS NULL), a.starts_at, a.title_ca`,
+         FROM activity a
+         JOIN activity_edition ae ON ae.id = a.current_edition_id
+         JOIN variant v ON v.edition_id = ae.id
+        WHERE ae.published = 1 AND ae.ends_at IS NOT NULL
+          AND a.archived = 0 AND ${AVAILABLE}
+        ORDER BY (ae.starts_at IS NULL), ae.starts_at, a.title_ca`,
     )
     .all<OnSaleItem>();
   return results;
@@ -168,13 +176,16 @@ export async function getDepartmentBySlug(
   const { results: activities } = await db
     .prepare(
       `SELECT a.id, a.slug, a.type, a.title_ca, a.title_es, a.title_en,
-              a.starts_at, a.location,
+              ae.starts_at, ae.location,
               MIN(CASE WHEN ${ON_SALE_EXPR} THEN v.price_cents END) AS min_price,
               COALESCE(SUM(${BUYABLE_AVAIL_EXPR}), 0) AS avail
-         FROM activity a LEFT JOIN variant v ON v.activity_id = a.id
-        WHERE a.department_id = ? AND a.published = 1 AND a.archived = 0
+         FROM activity a
+         JOIN activity_edition ae ON ae.id = a.current_edition_id
+         LEFT JOIN variant v ON v.edition_id = ae.id
+        WHERE a.department_id = ? AND ae.published = 1
+          AND ae.ends_at IS NOT NULL AND a.archived = 0
         GROUP BY a.id
-        ORDER BY (a.starts_at IS NULL), a.starts_at, a.title_ca`,
+        ORDER BY (ae.starts_at IS NULL), ae.starts_at, a.title_ca`,
     )
     .bind(department.id)
     .all<DeptActivity>();
@@ -187,6 +198,7 @@ export interface TicketPage {
   quantity: number;
   checked_in_at: string | null;
   order_status: string;
+  dispute_status: string;
   buyer_name: string;
   variant_name_ca: string;
   variant_name_es: string | null;
@@ -203,7 +215,7 @@ export async function getTicketByCode(code: string): Promise<TicketPage | null> 
   return db
     .prepare(
       `SELECT oi.ticket_code, oi.quantity, oi.checked_in_at,
-              o.status AS order_status, o.buyer_name,
+              o.status AS order_status, o.dispute_status, o.buyer_name,
               COALESCE(oi.variant_name_snapshot, v.name_ca) AS variant_name_ca,
               v.name_es AS variant_name_es, v.name_en AS variant_name_en,
               a.slug AS activity_slug,
@@ -221,6 +233,7 @@ export async function getTicketByCode(code: string): Promise<TicketPage | null> 
 export interface OrderReceipt {
   id: string;
   status: string;
+  dispute_status: string;
   buyer_name: string;
   activity_slug: string;
   activity_title_ca: string;
@@ -241,7 +254,7 @@ export async function getOrderReceipt(orderId: string): Promise<OrderReceipt | n
   const db = await getDb();
   const order = await db
     .prepare(
-      `SELECT o.id, o.status, o.buyer_name, a.slug AS activity_slug,
+      `SELECT o.id, o.status, o.dispute_status, o.buyer_name, a.slug AS activity_slug,
               a.title_ca AS activity_title_ca, a.title_es AS activity_title_es, a.title_en AS activity_title_en
          FROM "order" o JOIN activity a ON a.id = o.activity_id
         WHERE o.id = ?`,
@@ -271,15 +284,19 @@ export async function getActivityBySlug(
   const db = await getDb();
   const activity = await db
     .prepare(
-      `SELECT a.id, a.slug, a.type,
+      `SELECT a.id, ae.id AS edition_id, a.slug, a.type,
               a.title_ca, a.title_es, a.title_en,
               a.description_ca, a.description_es, a.description_en,
-              a.poster_url, a.starts_at, a.location, a.edition, a.max_per_order,
+              a.poster_url, ae.starts_at, ae.location, ae.label AS edition,
+              ae.max_per_order,
               a.size_guide_json, a.size_guide_image_url,
               d.slug AS dept_slug,
               d.name_ca AS dept_name_ca, d.name_es AS dept_name_es, d.name_en AS dept_name_en
-         FROM activity a JOIN department d ON d.id = a.department_id
-        WHERE a.slug = ? AND a.published = 1 AND a.archived = 0`,
+         FROM activity a
+         JOIN activity_edition ae ON ae.id = a.current_edition_id
+         JOIN department d ON d.id = a.department_id
+        WHERE a.slug = ? AND ae.published = 1
+          AND ae.ends_at IS NOT NULL AND a.archived = 0`,
     )
     .bind(slug)
     .first<ActivityPage["activity"]>();
@@ -291,14 +308,15 @@ export async function getActivityBySlug(
         .prepare(
           `SELECT v.id, v.name_ca, v.name_es, v.name_en, v.price_cents,
                   ${BUYABLE_AVAIL_EXPR} AS avail
-             FROM variant v WHERE v.activity_id = ? AND v.active = 1
+             FROM variant v WHERE v.edition_id = ? AND v.active = 1
             ORDER BY v.position, v.name_ca`,
         )
-        .bind(activity.id)
+        .bind(activity.edition_id)
         .all<Variant>(),
       db
         .prepare(
-          `SELECT id, label_ca, label_es, label_en, type, options_json, required
+          `SELECT id, label_ca, label_es, label_en, type, options_json, required,
+                  data_classification
              FROM field WHERE activity_id = ?
             ORDER BY position`,
         )

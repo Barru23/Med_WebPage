@@ -30,9 +30,22 @@ export default function DepartmentsList({
     });
   }
 
+  function moveBy(id: string, delta: number) {
+    setOrder((previous) => {
+      const from = previous.findIndex((department) => department.id === id);
+      const to = from + delta;
+      if (from < 0 || to < 0 || to >= previous.length) return previous;
+      const next = previous.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      startTransition(() => reorderDepartments(next.map((department) => department.id)));
+      return next;
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      {order.map((dept) => (
+      {order.map((dept, index) => (
         <div
           key={dept.id}
           onDragOver={(e) => e.preventDefault()}
@@ -45,6 +58,10 @@ export default function DepartmentsList({
               onDragStart: () => setDraggedId(dept.id),
               onDragEnd: () => setDraggedId(null),
             }}
+            onMoveUp={() => moveBy(dept.id, -1)}
+            onMoveDown={() => moveBy(dept.id, 1)}
+            first={index === 0}
+            last={index === order.length - 1}
           />
         </div>
       ))}

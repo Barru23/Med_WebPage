@@ -4,6 +4,7 @@ import { useActionState } from "react";
 import Image from "next/image";
 import {
   updateDepartment,
+  deleteDepartment,
   type ActionState,
 } from "@/lib/admin/actions/departments";
 import SubmitButton from "@/components/admin/SubmitButton";
@@ -12,9 +13,17 @@ import type { AdminDepartment } from "@/lib/admin/queries";
 export default function DepartmentRow({
   department,
   dragHandleProps,
+  onMoveUp,
+  onMoveDown,
+  first,
+  last,
 }: {
   department: AdminDepartment;
   dragHandleProps: React.HTMLAttributes<HTMLButtonElement>;
+  onMoveUp: () => void;
+  onMoveDown: () => void;
+  first: boolean;
+  last: boolean;
 }) {
   const [state, formAction] = useActionState<ActionState, FormData>(
     updateDepartment,
@@ -37,6 +46,15 @@ export default function DepartmentRow({
         ⠿
       </button>
 
+      <div className="flex gap-1 sm:flex-col">
+        <button type="button" className="admin-btn px-2" disabled={first} onClick={onMoveUp} aria-label="Mou amunt">
+          ↑
+        </button>
+        <button type="button" className="admin-btn px-2" disabled={last} onClick={onMoveDown} aria-label="Mou avall">
+          ↓
+        </button>
+      </div>
+
       <div className="flex-none">
         {department.photo_url ? (
           <Image
@@ -55,7 +73,7 @@ export default function DepartmentRow({
         <input
           type="file"
           name="photo"
-          accept="image/*"
+          accept="image/jpeg,image/png,image/webp"
           className="mt-1 block w-16 text-[0.55rem] file:mr-0 file:rounded-none file:border file:border-sand file:bg-bone file:px-1 file:py-0.5 file:text-[0.55rem] file:text-ink"
           title="Canviar foto"
         />
@@ -86,6 +104,16 @@ export default function DepartmentRow({
           <p className="font-mono text-xs text-signal">{state.error}</p>
         )}
         <SubmitButton pendingText="Desant…">Desar</SubmitButton>
+        <button
+          type="button"
+          className="admin-btn admin-btn-danger"
+          onClick={() => {
+            if (!window.confirm("Eliminar aquest departament buit?")) return;
+            void deleteDepartment(department.id);
+          }}
+        >
+          Eliminar
+        </button>
       </div>
     </form>
   );

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSales } from "@/lib/admin/queries";
-import { formatPrice } from "@/lib/format";
+import { formatDate, formatPrice } from "@/lib/format";
 import { LIVE_SHEET_URL, sheetTabName } from "@/lib/sheet";
 import MarkPaidButton from "./MarkPaidButton";
 import ResyncButton from "./ResyncButton";
@@ -79,7 +79,10 @@ export default async function SalesPage({
 
       <div className="mt-6 flex flex-wrap gap-2">
         <a href={exportHref} className="admin-btn admin-btn-primary">
-          Descarregar Excel
+          Excel de pagades
+        </a>
+        <a href={`${exportHref}${exportHref.includes("?") ? "&" : "?"}include=all`} className="admin-btn">
+          Excel complet
         </a>
         <a
           href={LIVE_SHEET_URL}
@@ -126,26 +129,54 @@ export default async function SalesPage({
                   {b.variant_name} ×{b.quantity}
                 </td>
                 <td className="py-2 pr-3">{b.ticket_code}</td>
-                <td className="py-2 pr-3">{STATUS_LABELS[b.status] ?? b.status}</td>
+                <td className="py-2 pr-3">
+                  {STATUS_LABELS[b.status] ?? b.status}
+                  {b.dispute_status === "open" && (
+                    <span className="block text-signal">Disputa oberta</span>
+                  )}
+                  {b.dispute_status === "won" && <span className="block">Disputa guanyada</span>}
+                  {b.dispute_status === "lost" && <span className="block">Disputa perduda</span>}
+                  {b.refunded_cents > 0 && b.status === "paid" && (
+                    <span className="block">Parcial: −{formatPrice(b.refunded_cents, "ca")}</span>
+                  )}
+                </td>
                 <td className="py-2 pr-3">
                   {(isMerch ? b.collected_at : b.checked_in_at) ? "✓" : "—"}
                 </td>
                 <td className="py-2 pr-3">
                   {b.status !== "paid" ? (
                     "—"
-                  ) : b.relay_synced_at ? (
-                    "✓"
                   ) : (
-                    <span className="text-signal">no enviat</span>
+                    <span
+                      className={
+                        b.relay_sheet_status === "sent" && b.relay_email_status === "sent"
+                          ? ""
+                          : "text-signal"
+                      }
+                    >
+                      Full: {b.relay_sheet_status === "sent" ? "✓" : "pendent"}
+                      {" · "}
+                      Correu: {
+                        b.relay_email_status === "sent"
+                          ? "✓"
+                          : b.relay_email_status === "unknown"
+                            ? "?"
+                            : "pendent"
+                      }
+                    </span>
                   )}
                 </td>
-                <td className="py-2 pr-3">{b.created_at}</td>
+                <td className="py-2 pr-3">{formatDate(b.created_at, "ca")}</td>
                 <td className="py-2 pr-3">
                   {b.status === "pending" && b.payment_method === "manual" && (
                     <MarkPaidButton orderId={b.order_id} />
                   )}
-                  {b.status === "paid" && !b.relay_synced_at && (
-                    <ResyncButton orderId={b.order_id} />
+                  {b.status === "paid" && (
+                    <ResyncButton
+                      orderId={b.order_id}
+                      sheetStatus={b.relay_sheet_status}
+                      emailStatus={b.relay_email_status}
+                    />
                   )}
                 </td>
               </tr>

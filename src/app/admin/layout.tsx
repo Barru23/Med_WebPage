@@ -8,6 +8,7 @@ const NAV = [
   { href: "/admin/activities", label: "Activitats" },
   { href: "/admin/door", label: "Porta" },
   { href: "/admin/pickup", label: "Recollida" },
+  { href: "/admin/operations", label: "Operacions" },
 ];
 
 export default async function AdminLayout({
@@ -48,7 +49,7 @@ export default async function AdminLayout({
           ))}
         </nav>
       </header>
-      <main className="flex-1 px-4 py-5">{children}</main>
+      <main id="main-content" className="flex-1 px-4 py-5">{children}</main>
     </div>
   );
 }

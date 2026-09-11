@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { useEffect, useRef, useState } from "react";
 import { GreasePencilRing } from "@/components/marks";
 import PendingDot from "@/components/Pending";
@@ -10,6 +11,7 @@ export interface DepartmentGridItem {
   slug: string;
   name: string;
   openCount: number;
+  photoUrl: string | null;
 }
 
 export default function DepartmentGrid({
@@ -85,6 +87,16 @@ export default function DepartmentGrid({
               open ? "hover:shadow-[3px_3px_0_var(--color-sand)]" : "opacity-60"
             }`}
           >
+            {department.photoUrl && (
+              <Image
+                src={department.photoUrl}
+                alt=""
+                fill
+                sizes="(min-width: 640px) 33vw, 50vw"
+                className="object-cover opacity-25 transition-opacity group-hover:opacity-35"
+                unoptimized
+              />
+            )}
             <span className="font-mono text-[0.65rem] tracking-widest text-ink/40">{frame}</span>
             <span
               data-ring-target={department.id}

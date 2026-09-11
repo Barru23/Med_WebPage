@@ -8,8 +8,32 @@ import { Stamp, MarkerNote } from "@/components/marks";
 import CheckoutForm from "./CheckoutForm";
 import SizeGuideModal from "./SizeGuideModal";
 import Image from "next/image";
+import type { Metadata } from "next";
 
 export const dynamic = "force-dynamic";
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ locale: string; slug: string }>;
+}): Promise<Metadata> {
+  const { locale, slug } = await params;
+  if (!isLocale(locale)) return { title: "XIVARRI" };
+  const data = await getActivityBySlug(slug);
+  if (!data) return { title: "XIVARRI" };
+  const title = pick(data.activity, "title", locale);
+  const description = pick(data.activity, "description", locale).slice(0, 160);
+  return {
+    title: `${title} · XIVARRI`,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: data.activity.poster_url ? [data.activity.poster_url] : [],
+    },
+  };
+}
 
 export default async function ActivityPage({
   params,
@@ -152,7 +176,8 @@ export default async function ActivityPage({
               buyerPhone: t("activity.buyerPhone"),
               maxPerOrder: t("activity.maxPerOrder"),
               privacyLink: t("activity.privacyLink"),
-              serviceFee: t("activity.serviceFee"),
+            serviceFee: t("activity.serviceFee"),
+            sensitiveConsent: t("activity.sensitiveConsent"),
               termsAccept: t("activity.termsAccept"),
               termsLink: t("activity.termsLink"),
               subtotal: t("activity.subtotal"),

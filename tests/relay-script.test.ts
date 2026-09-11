@@ -13,15 +13,21 @@ import { sheetTabName } from "../src/lib/sheet.ts";
 
 function order(harness: RelayHarness, over: Partial<RelayPayload> = {}): RelayPayload {
   return {
+    version: 2,
+    channels: ["sheet", "email"],
     secret: harness.secret,
     order_id: "ord_" + Math.random().toString(16).slice(2),
     paid_at: "2026-10-04 21:14:02",
+    locale: "ca",
     buyer_name: "Marc Puig",
     buyer_email: "marc@example.com",
     buyer_phone: "600111222",
     activity: "Mediportaventura",
+    activity_display: "Mediportaventura",
     edition: "Tardor 2026",
+    edition_ends_at: "2026-10-05T01:00:00.000Z",
     field_labels: ["DNI", "Al·lèrgies"],
+    field_classifications: { DNI: "identity", "Al·lèrgies": "health" },
     payment_method: "stripe",
     total_eur: 45.3,
     ticket_url_base: "https://xivarri.cat/ca/t/",
@@ -57,6 +63,40 @@ test("a paid order becomes one row on its activity-and-edition tab, plus an emai
   assert.ok(relay.mails[0].subject.includes("K7M2X9"));
 });
 
+test("the canonical activity name keeps every locale on one tab", () => {
+  const relay = loadRelayScript();
+  relay.post(order(relay, {
+    locale: "es",
+    activity: "Viatge",
+    activity_display: "Viaje",
+  }));
+
+  assert.ok(relay.sheet("Viatge — Tardor 2026"));
+  assert.equal(relay.sheet("Viaje — Tardor 2026"), undefined);
+  assert.match(relay.mails[0].subject, /Tu entrada para Viaje/);
+});
+
+test("daily retention clears sensitive columns after the edition", () => {
+  const relay = loadRelayScript();
+  relay.post(order(relay, {
+    edition_ends_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+  }));
+
+  relay.runRetentionCleanup();
+  const row = relay.sheet("Mediportaventura — Tardor 2026")!.row(2);
+  assert.equal(row.DNI, "");
+  assert.equal(row["Al·lèrgies"], "");
+  assert.equal(row.comprador, "Marc Puig");
+});
+
+test("daily retention removes the edition sheet after twelve months", () => {
+  const relay = loadRelayScript();
+  relay.post(order(relay, { edition_ends_at: "2020-01-01T00:00:00.000Z" }));
+
+  relay.runRetentionCleanup();
+  assert.equal(relay.sheet("Mediportaventura — Tardor 2026"), undefined);
+});
+
 test("a Stripe retry writes nothing twice", () => {
   const relay = loadRelayScript();
   const payload = order(relay);
@@ -67,6 +107,22 @@ test("a Stripe retry writes nothing twice", () => {
   // OK, not an error: Stripe must stop retrying.
   assert.equal(retry.ok, true);
   assert.equal(retry.duplicat, true);
+  assert.equal(relay.sheet("Mediportaventura — Tardor 2026")!.getLastRow(), 2);
+  assert.equal(relay.mails.length, 1);
+});
+
+test("a failed email retries without duplicating the sheet row", () => {
+  const relay = loadRelayScript();
+  const payload = order(relay);
+  relay.failNextMail();
+
+  const first = relay.post(payload);
+  assert.equal((first.sheet as { sent: boolean }).sent, true);
+  assert.equal((first.email as { sent: boolean }).sent, false);
+  assert.equal(relay.sheet("Mediportaventura — Tardor 2026")!.getLastRow(), 2);
+
+  const retry = relay.post({ ...payload, channels: ["email"] });
+  assert.equal((retry.email as { sent: boolean }).sent, true);
   assert.equal(relay.sheet("Mediportaventura — Tardor 2026")!.getLastRow(), 2);
   assert.equal(relay.mails.length, 1);
 });

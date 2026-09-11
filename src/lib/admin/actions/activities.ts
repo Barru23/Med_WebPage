@@ -6,10 +6,11 @@ import { requireAdmin } from "@/lib/auth";
 import { getDb } from "@/lib/db";
 import { newId } from "@/lib/ids";
 import { slugify } from "@/lib/slug";
-import { saveMedia } from "@/lib/storage";
+import { deleteMedia, saveMedia, validateImageFile } from "@/lib/storage";
 import { getStripe } from "@/lib/stripe";
 import { wallTimeToUtc } from "@/lib/time";
 import { eurosToCents } from "@/lib/admin/money";
+import { HELD_BY_STRIPE, SOLD_FROM_ORDERS } from "@/lib/availability";
 import type { VariantDraft, FieldDraft } from "@/lib/admin/activityForm";
 import type {
   ActivityImageDraft,
@@ -23,11 +24,30 @@ function str(v: FormDataEntryValue | null): string | null {
   return s === "" ? null : s;
 }
 
+async function deleteMediaIfUnreferenced(
+  db: D1Database,
+  url: string | null | undefined,
+): Promise<void> {
+  if (!url) return;
+  const reference = await db
+    .prepare(
+      `SELECT 1 FROM activity
+        WHERE poster_url = ? OR size_guide_image_url = ?
+       UNION ALL SELECT 1 FROM activity_image WHERE image_url = ?
+       UNION ALL SELECT 1 FROM department WHERE photo_url = ?
+       LIMIT 1`,
+    )
+    .bind(url, url, url, url)
+    .first();
+  if (!reference) await deleteMedia(url);
+}
+
 function maxPerOrder(v: FormDataEntryValue | null): number | null {
   const raw = str(v);
   if (!raw) return null;
-  const n = Number.parseInt(raw, 10);
-  return Number.isFinite(n) && n > 0 ? n : null;
+  if (!/^\d+$/.test(raw)) return null;
+  const n = Number(raw);
+  return Number.isSafeInteger(n) && n > 0 && n <= 100 ? n : null;
 }
 
 function parseVariants(json: string): VariantDraft[] {
@@ -99,17 +119,16 @@ function imageFiles(formData: FormData, name: string): File[] {
     .filter((value): value is File => value instanceof File && value.size > 0);
 }
 
-function validateImages(files: File[]): string | null {
-  if (files.some((file) => !file.type.startsWith("image/"))) {
-    return "Només es poden pujar fitxers d'imatge.";
+async function validateImages(files: File[]): Promise<string | null> {
+  if (files.reduce((total, file) => total + file.size, 0) > 10 * 1024 * 1024) {
+    return "El conjunt d'imatges ha de pesar 10 MB o menys.";
   }
-  if (files.some((file) => file.size > 10 * 1024 * 1024)) {
-    return "Cada imatge ha de pesar menys de 10 MB.";
+  try {
+    for (const file of files) await validateImageFile(file);
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : "La imatge no és vàlida.";
   }
-  if (files.reduce((total, file) => total + file.size, 0) > 24 * 1024 * 1024) {
-    return "El conjunt d'imatges ha de pesar menys de 24 MB.";
-  }
-  return null;
 }
 
 function toDatetime(v: string): string | null {
@@ -138,6 +157,7 @@ type CatalogPlan =
 async function prepareVariantsAndFields(
   db: D1Database,
   activityId: string,
+  editionId: string,
   variants: VariantDraft[],
   fields: FieldDraft[],
 ): Promise<CatalogPlan> {
@@ -145,8 +165,19 @@ async function prepareVariantsAndFields(
   if (validVariants.length === 0) {
     return { error: "Cal almenys una modalitat (variant)." };
   }
+  const fieldTypes = new Set(["text", "number", "select", "checkbox"]);
+  const classifications = new Set(["standard", "identity", "health"]);
+  if (
+    fields.some(
+      (field) =>
+        !field.label_ca?.trim() || !fieldTypes.has(field.type) ||
+        !classifications.has(field.data_classification),
+    )
+  ) {
+    return { error: "Revisa el nom, tipus i classificació de les preguntes." };
+  }
 
-  const pricedVariants: Array<{ draft: VariantDraft; priceCents: number }> = [];
+  const pricedVariants: Array<{ draft: VariantDraft; priceCents: number; stock: number }> = [];
   for (const variant of validVariants) {
     const priceCents = eurosToCents(variant.price_euros);
     if (priceCents === null) {
@@ -154,14 +185,39 @@ async function prepareVariantsAndFields(
         error: `El preu de «${variant.name_ca}» no és vàlid. Escriu, per exemple, 12,50.`,
       };
     }
-    pricedVariants.push({ draft: variant, priceCents });
+    if (!/^\d+$/.test(variant.stock.trim())) {
+      return { error: `L'estoc de «${variant.name_ca}» ha de ser un enter positiu o zero.` };
+    }
+    const stock = Number(variant.stock);
+    if (!Number.isSafeInteger(stock)) {
+      return { error: `L'estoc de «${variant.name_ca}» és massa gran.` };
+    }
+    const saleStart = toDatetime(variant.sale_start);
+    const saleEnd = toDatetime(variant.sale_end);
+    if (saleStart && saleEnd && saleStart > saleEnd) {
+      return { error: `La venda de «${variant.name_ca}» no pot acabar abans de començar.` };
+    }
+    pricedVariants.push({ draft: variant, priceCents, stock });
   }
 
   const [{ results: existingVariants }, { results: existingFields }] = await Promise.all([
     db
-      .prepare(`SELECT id, price_cents FROM variant WHERE activity_id = ? AND active = 1`)
-      .bind(activityId)
-      .all<{ id: string; price_cents: number }>(),
+      .prepare(
+        `SELECT v.id, v.price_cents, v.stock, v.sale_start, v.sale_end,
+                ${SOLD_FROM_ORDERS} AS sold_real, ${HELD_BY_STRIPE} AS held
+           FROM variant v
+          WHERE v.activity_id = ? AND v.edition_id = ? AND v.active = 1`,
+      )
+      .bind(activityId, editionId)
+      .all<{
+        id: string;
+        price_cents: number;
+        stock: number;
+        sale_start: string | null;
+        sale_end: string | null;
+        sold_real: number;
+        held: number;
+      }>(),
     db
       .prepare(`SELECT id FROM field WHERE activity_id = ?`)
       .bind(activityId)
@@ -198,15 +254,25 @@ async function prepareVariantsAndFields(
     statements.push(db.prepare(`DELETE FROM field WHERE id = ?`).bind(f.id));
   }
 
-  pricedVariants.forEach(({ draft: v, priceCents }, position) => {
-    const stock = Math.max(0, Number.parseInt(v.stock, 10) || 0);
+  for (const { draft, stock } of pricedVariants) {
+    const existing = draft.id
+      ? existingVariants.find((variant) => variant.id === draft.id)
+      : null;
+    if (existing && stock < existing.sold_real + existing.held) {
+      return {
+        error: `L'estoc de «${draft.name_ca}» no pot baixar de ${existing.sold_real + existing.held}: hi ha vendes o reserves actives.`,
+      };
+    }
+  }
+
+  pricedVariants.forEach(({ draft: v, priceCents, stock }, position) => {
     if (v.id) {
       statements.push(
         db
           .prepare(
             `UPDATE variant SET name_ca=?, name_es=?, name_en=?, price_cents=?, stock=?,
                     sale_start=?, sale_end=?, position=?, active=1
-              WHERE id=? AND activity_id=?`,
+              WHERE id=? AND activity_id=? AND edition_id=?`,
           )
           .bind(
             v.name_ca,
@@ -219,18 +285,20 @@ async function prepareVariantsAndFields(
             position,
             v.id,
             activityId,
+            editionId,
           ),
       );
     } else {
       statements.push(
         db
           .prepare(
-            `INSERT INTO variant (id, activity_id, name_ca, name_es, name_en, price_cents, stock, sale_start, sale_end, position)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO variant (id, activity_id, edition_id, name_ca, name_es, name_en, price_cents, stock, sale_start, sale_end, position)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             newId("var"),
             activityId,
+            editionId,
             v.name_ca,
             v.name_es || null,
             v.name_en || null,
@@ -245,20 +313,24 @@ async function prepareVariantsAndFields(
   });
 
   fields.forEach((f, position) => {
+    const caOptions = (f.options ?? "").split("\n").map((option) => option.trim()).filter(Boolean);
+    const esOptions = (f.options_es ?? "").split("\n").map((option) => option.trim());
+    const enOptions = (f.options_en ?? "").split("\n").map((option) => option.trim());
     const options =
-      (f.type === "select" || f.type === "checkbox") && f.options.trim()
+      (f.type === "select" || f.type === "checkbox") && caOptions.length
         ? JSON.stringify(
-            f.options
-              .split("\n")
-              .map((o) => o.trim())
-              .filter(Boolean),
+            caOptions.map((ca, index) => ({
+              ca,
+              es: esOptions[index] || ca,
+              en: enOptions[index] || ca,
+            })),
           )
         : null;
     if (f.id) {
       statements.push(
         db
           .prepare(
-            `UPDATE field SET label_ca=?, label_es=?, label_en=?, type=?, options_json=?, required=?, position=?
+            `UPDATE field SET label_ca=?, label_es=?, label_en=?, type=?, options_json=?, required=?, position=?, data_classification=?
               WHERE id=? AND activity_id=?`,
           )
           .bind(
@@ -269,6 +341,7 @@ async function prepareVariantsAndFields(
             options,
             f.required ? 1 : 0,
             position,
+            f.data_classification,
             f.id,
             activityId,
           ),
@@ -277,8 +350,8 @@ async function prepareVariantsAndFields(
       statements.push(
         db
           .prepare(
-            `INSERT INTO field (id, activity_id, position, label_ca, label_es, label_en, type, options_json, required)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            `INSERT INTO field (id, activity_id, position, label_ca, label_es, label_en, type, options_json, required, data_classification)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           )
           .bind(
             newId("fld"),
@@ -290,6 +363,7 @@ async function prepareVariantsAndFields(
             f.type,
             options,
             f.required ? 1 : 0,
+            f.data_classification,
           ),
       );
     }
@@ -297,11 +371,17 @@ async function prepareVariantsAndFields(
 
   // A session's line items carry the price the buyer agreed to. Only a price
   // that moved, or a modality that went away, can make that snapshot wrong.
-  const priceOf = new Map(existingVariants.map((v) => [v.id, v.price_cents]));
+  const previousOf = new Map(existingVariants.map((v) => [v.id, v]));
   const affectsOpenCheckouts =
     removed.length > 0 ||
     pricedVariants.some(
-      ({ draft, priceCents }) => draft.id && priceOf.get(draft.id) !== priceCents,
+      ({ draft, priceCents, stock }) => {
+        if (!draft.id) return false;
+        const previous = previousOf.get(draft.id);
+        return !previous || previous.price_cents !== priceCents || previous.stock !== stock ||
+          previous.sale_start !== toDatetime(draft.sale_start) ||
+          previous.sale_end !== toDatetime(draft.sale_end);
+      },
     );
 
   return { statements, affectsOpenCheckouts };
@@ -383,9 +463,14 @@ async function preparePendingCheckoutCancellation(
       db
         .prepare(
           `UPDATE stock_reservation SET expires_at = datetime('now')
-            WHERE order_id = ? AND consumed_at IS NULL`,
+            WHERE order_id = ? AND consumed_at IS NULL
+              AND EXISTS (
+                SELECT 1 FROM "order" o
+                 WHERE o.id = ? AND o.stripe_session_id = ?
+                   AND o.status = 'cancelled'
+              )`,
         )
-        .bind(order.id),
+        .bind(order.id, order.id, order.stripe_session_id),
     );
   }
   return { statements };
@@ -402,6 +487,11 @@ export async function createActivity(
   if (!titleCa || !departmentId || !type) {
     return { error: "Departament, tipus i títol (CA) són obligatoris." };
   }
+  const startsAt = toDatetime(str(formData.get("starts_at")) ?? "");
+  const endsAt = toDatetime(str(formData.get("ends_at")) ?? "");
+  if (startsAt && endsAt && startsAt > endsAt) {
+    return { error: "La data final no pot ser anterior a la data d'inici." };
+  }
 
   const sizeGuide = normalizedSizeGuide(
     parseSizeGuide(String(formData.get("size_guide_json") ?? "[]")),
@@ -410,7 +500,7 @@ export async function createActivity(
   const galleryFiles = imageFiles(formData, "gallery");
   const guideFiles = imageFiles(formData, "size_guide_image");
   const posterFiles = imageFiles(formData, "poster");
-  const mediaError = validateImages([
+  const mediaError = await validateImages([
     ...galleryFiles,
     ...guideFiles,
     ...posterFiles,
@@ -425,9 +515,21 @@ export async function createActivity(
   }
 
   const id = newId("act");
+  const editionId = newId("ed");
+  const editionLabel = str(formData.get("edition")) ?? "Edició inicial";
+  const orderLimit = maxPerOrder(formData.get("max_per_order"));
+  if (str(formData.get("max_per_order")) && orderLimit === null) {
+    return { error: "El màxim per compra ha de ser un enter entre 1 i 100." };
+  }
   const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
   const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
-  const catalog = await prepareVariantsAndFields(db, id, variants, fields);
+  const wantsPublished = Boolean(formData.get("published"));
+  if (wantsPublished && !endsAt) {
+    return {
+      error: "Cal indicar una data final abans de publicar l'activitat.",
+    };
+  }
+  const catalog = await prepareVariantsAndFields(db, id, editionId, variants, fields);
   if ("error" in catalog) return { error: catalog.error };
 
   const posterUrl = posterFiles[0]
@@ -463,9 +565,9 @@ export async function createActivity(
       posterUrl,
       toDatetime(str(formData.get("starts_at")) ?? ""),
       str(formData.get("location")),
-      str(formData.get("edition")),
-      maxPerOrder(formData.get("max_per_order")),
-      formData.get("published") ? 1 : 0,
+      editionLabel,
+      orderLimit,
+      wantsPublished ? 1 : 0,
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
     );
@@ -477,10 +579,36 @@ export async function createActivity(
       )
       .bind(newId("img"), id, imageUrl, titleCa, position),
   );
+  const editionStatement = db
+    .prepare(
+      `INSERT INTO activity_edition (
+         id, activity_id, label, starts_at, ends_at, location, max_per_order, published,
+         catalog_revision
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+    )
+    .bind(
+      editionId,
+      id,
+      editionLabel,
+      toDatetime(str(formData.get("starts_at")) ?? ""),
+      toDatetime(str(formData.get("ends_at")) ?? ""),
+      str(formData.get("location")),
+      orderLimit,
+      wantsPublished ? 1 : 0,
+    );
+  const selectEditionStatement = db
+    .prepare(`UPDATE activity SET current_edition_id = ? WHERE id = ?`)
+    .bind(editionId, id);
 
   // D1 batches are transactional: either the activity and all its editable
   // children are created, or none of them are.
-  await db.batch([activityStatement, ...catalog.statements, ...galleryStatements]);
+  await db.batch([
+    activityStatement,
+    editionStatement,
+    selectEditionStatement,
+    ...catalog.statements,
+    ...galleryStatements,
+  ]);
 
   revalidatePath("/admin/activities");
   redirect(`/admin/activities/${id}`);
@@ -499,6 +627,11 @@ export async function updateActivity(
   }
 
   const type = str(formData.get("type"));
+  const startsAt = toDatetime(str(formData.get("starts_at")) ?? "");
+  const endsAt = toDatetime(str(formData.get("ends_at")) ?? "");
+  if (startsAt && endsAt && startsAt > endsAt) {
+    return { error: "La data final no pot ser anterior a la data d'inici." };
+  }
   const sizeGuide = normalizedSizeGuide(
     parseSizeGuide(String(formData.get("size_guide_json") ?? "[]")),
   );
@@ -506,31 +639,57 @@ export async function updateActivity(
   const galleryFiles = imageFiles(formData, "gallery");
   const guideFiles = imageFiles(formData, "size_guide_image");
   const posterFiles = imageFiles(formData, "poster");
-  const mediaError = validateImages([...galleryFiles, ...guideFiles, ...posterFiles]);
+  const mediaError = await validateImages([...galleryFiles, ...guideFiles, ...posterFiles]);
   if (mediaError) return { error: mediaError };
 
   const db = await getDb();
   const current = await db
     .prepare(
-      `SELECT poster_url, size_guide_image_url, archived FROM activity WHERE id = ?`,
+      `SELECT a.poster_url, a.size_guide_image_url, a.archived,
+              ae.id AS edition_id, ae.published, ae.max_per_order
+         FROM activity a
+         JOIN activity_edition ae ON ae.id = a.current_edition_id
+        WHERE a.id = ?`,
     )
     .bind(id)
     .first<{
       poster_url: string | null;
       size_guide_image_url: string | null;
       archived: number;
+      edition_id: string;
+      published: number;
+      max_per_order: number | null;
   }>();
   if (!current) return { error: "L'activitat no existeix." };
 
   const variants = parseVariants(String(formData.get("variants_json") ?? "[]"));
   const fields = parseFields(String(formData.get("fields_json") ?? "[]"));
-  const catalog = await prepareVariantsAndFields(db, id, variants, fields);
+  const orderLimit = maxPerOrder(formData.get("max_per_order"));
+  if (str(formData.get("max_per_order")) && orderLimit === null) {
+    return { error: "El màxim per compra ha de ser un enter entre 1 i 100." };
+  }
+  const catalog = await prepareVariantsAndFields(
+    db,
+    id,
+    current.edition_id,
+    variants,
+    fields,
+  );
   if ("error" in catalog) return { error: catalog.error };
+
+  const nextPublished = current.archived ? 0 : formData.get("published") ? 1 : 0;
+  if (nextPublished && !endsAt) {
+    return {
+      error: "Cal indicar una data final abans de publicar l'activitat.",
+    };
+  }
+  const editionAffectsOpenCheckouts =
+    current.published !== nextPublished || current.max_per_order !== orderLimit;
 
   // Only reach for Stripe when the edit could invalidate a session in flight.
   // Otherwise an admin fixing a description would throw everyone mid-payment
   // out of checkout, and a Stripe outage would block edits that cannot hurt.
-  const checkoutCancellation = catalog.affectsOpenCheckouts
+  const checkoutCancellation = catalog.affectsOpenCheckouts || editionAffectsOpenCheckouts
     ? await preparePendingCheckoutCancellation(db, id)
     : { statements: [] as D1PreparedStatement[] };
   if ("error" in checkoutCancellation) return { error: checkoutCancellation.error };
@@ -564,10 +723,27 @@ export async function updateActivity(
       toDatetime(str(formData.get("starts_at")) ?? ""),
       str(formData.get("location")),
       str(formData.get("edition")),
-      maxPerOrder(formData.get("max_per_order")),
-      current.archived ? 0 : formData.get("published") ? 1 : 0,
+      orderLimit,
+      nextPublished,
       type === "merch" ? sizeGuide.value : null,
       type === "merch" ? sizeGuideImageUrl : null,
+      id,
+    );
+  const editionStatement = db
+    .prepare(
+      `UPDATE activity_edition
+          SET label = ?, starts_at = ?, ends_at = ?, location = ?, max_per_order = ?,
+              published = ?, catalog_revision = catalog_revision + 1
+        WHERE id = ? AND activity_id = ?`,
+    )
+    .bind(
+      str(formData.get("edition")) ?? "Edició inicial",
+      toDatetime(str(formData.get("starts_at")) ?? ""),
+      toDatetime(str(formData.get("ends_at")) ?? ""),
+      str(formData.get("location")),
+      orderLimit,
+      nextPublished,
+      current.edition_id,
       id,
     );
 
@@ -607,9 +783,22 @@ export async function updateActivity(
   await db.batch([
     ...checkoutCancellation.statements,
     activityStatement,
+    editionStatement,
     ...imageStatements,
     ...catalog.statements,
   ]);
+  const removedMedia = [
+    ...storedImages
+      .filter((image) => !retainedIds.has(image.id))
+      .map((image) => image.image_url),
+    ...(posterFiles[0] && current.poster_url !== posterUrl ? [current.poster_url] : []),
+    ...(current.size_guide_image_url !== sizeGuideImageUrl
+      ? [current.size_guide_image_url]
+      : []),
+  ].filter((url): url is string => Boolean(url));
+  await Promise.allSettled(
+    removedMedia.map((url) => deleteMediaIfUnreferenced(db, url)),
+  );
 
   revalidatePath("/admin/activities");
   revalidatePath(`/admin/activities/${id}`);
@@ -622,7 +811,13 @@ export async function updateActivity(
 export async function duplicateActivity(id: string): Promise<void> {
   await requireAdmin();
   const db = await getDb();
-  const activity = await db.prepare(`SELECT * FROM activity WHERE id=?`).bind(id).first<{
+  const activity = await db.prepare(
+    `SELECT a.*, ae.label AS edition_label, ae.starts_at AS edition_starts_at,
+            ae.location AS edition_location, ae.max_per_order AS edition_max_per_order
+       FROM activity a
+       JOIN activity_edition ae ON ae.id = a.current_edition_id
+      WHERE a.id = ?`,
+  ).bind(id).first<{
     department_id: string;
     type: string;
     title_ca: string;
@@ -636,6 +831,10 @@ export async function duplicateActivity(id: string): Promise<void> {
     max_per_order: number | null;
     size_guide_json: string | null;
     size_guide_image_url: string | null;
+    edition_label: string;
+    edition_starts_at: string | null;
+    edition_location: string | null;
+    edition_max_per_order: number | null;
   }>();
   if (!activity) return;
 
@@ -646,13 +845,15 @@ export async function duplicateActivity(id: string): Promise<void> {
   }
 
   const newActivityId = newId("act");
+  const newEditionId = newId("ed");
   const activityStatement = db
     .prepare(
       `INSERT INTO activity
         (id, slug, department_id, type, title_ca, title_es, title_en,
-         description_ca, description_es, description_en, poster_url, location,
-         max_per_order, published, archived, size_guide_json, size_guide_image_url)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
+         description_ca, description_es, description_en, poster_url, starts_at,
+         location, edition, max_per_order, published, archived,
+         size_guide_json, size_guide_image_url)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0, ?, ?)`,
     )
     .bind(
       newActivityId,
@@ -666,19 +867,22 @@ export async function duplicateActivity(id: string): Promise<void> {
       activity.description_es,
       activity.description_en,
       activity.poster_url,
-      activity.location,
-      activity.max_per_order,
+      activity.edition_starts_at,
+      activity.edition_location,
+      activity.edition_label,
+      activity.edition_max_per_order,
       activity.size_guide_json,
       activity.size_guide_image_url,
     );
 
   const { results: variants } = await db
-    .prepare(`SELECT name_ca, name_es, name_en, price_cents, position FROM variant WHERE activity_id=? AND active=1`)
-    .bind(id)
+    .prepare(`SELECT name_ca, name_es, name_en, price_cents, position FROM variant WHERE activity_id=? AND edition_id = (SELECT current_edition_id FROM activity WHERE id = ?) AND active=1`)
+    .bind(id, id)
     .all<{ name_ca: string; name_es: string | null; name_en: string | null; price_cents: number; position: number }>();
   const { results: fields } = await db
     .prepare(
-      `SELECT label_ca, label_es, label_en, type, options_json, required, position FROM field WHERE activity_id=?`,
+      `SELECT label_ca, label_es, label_en, type, options_json, required, position,
+              data_classification FROM field WHERE activity_id=?`,
     )
     .bind(id)
     .all<{
@@ -689,6 +893,7 @@ export async function duplicateActivity(id: string): Promise<void> {
       options_json: string | null;
       required: number;
       position: number;
+      data_classification: string;
     }>();
   const { results: images } = await db
     .prepare(
@@ -702,16 +907,16 @@ export async function duplicateActivity(id: string): Promise<void> {
     ...variants.map((v) =>
       db
         .prepare(
-          `INSERT INTO variant (id, activity_id, name_ca, name_es, name_en, price_cents, stock, position)
-           VALUES (?, ?, ?, ?, ?, ?, 0, ?)`,
+          `INSERT INTO variant (id, activity_id, edition_id, name_ca, name_es, name_en, price_cents, stock, position)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)`,
         )
-        .bind(newId("var"), newActivityId, v.name_ca, v.name_es, v.name_en, v.price_cents, v.position),
+        .bind(newId("var"), newActivityId, newEditionId, v.name_ca, v.name_es, v.name_en, v.price_cents, v.position),
     ),
     ...fields.map((f) =>
       db
         .prepare(
-          `INSERT INTO field (id, activity_id, position, label_ca, label_es, label_en, type, options_json, required)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO field (id, activity_id, position, label_ca, label_es, label_en, type, options_json, required, data_classification)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           newId("fld"),
@@ -723,6 +928,7 @@ export async function duplicateActivity(id: string): Promise<void> {
           f.type,
           f.options_json,
           f.required,
+          f.data_classification,
         ),
     ),
     ...images.map((image) =>
@@ -740,7 +946,24 @@ export async function duplicateActivity(id: string): Promise<void> {
         ),
     ),
   ];
-  await db.batch([activityStatement, ...statements]);
+  const editionStatement = db
+    .prepare(
+      `INSERT INTO activity_edition (
+         id, activity_id, label, starts_at, location, max_per_order, published
+       ) VALUES (?, ?, ?, ?, ?, ?, 0)`,
+    )
+    .bind(
+      newEditionId,
+      newActivityId,
+      activity.edition_label,
+      activity.edition_starts_at,
+      activity.edition_location,
+      activity.edition_max_per_order,
+    );
+  const selectEditionStatement = db
+    .prepare(`UPDATE activity SET current_edition_id = ? WHERE id = ?`)
+    .bind(newEditionId, newActivityId);
+  await db.batch([activityStatement, editionStatement, selectEditionStatement, ...statements]);
 
   revalidatePath("/admin/activities");
   redirect(`/admin/activities/${newActivityId}`);
@@ -761,6 +984,14 @@ export async function setActivityArchived(
     ...checkoutCancellation.statements,
     db
       .prepare(
+        `UPDATE activity_edition
+            SET published = CASE WHEN ? = 1 THEN 0 ELSE published END,
+                catalog_revision = catalog_revision + 1
+          WHERE id = (SELECT current_edition_id FROM activity WHERE id = ?)` ,
+      )
+      .bind(archived ? 1 : 0, id),
+    db
+      .prepare(
         `UPDATE activity
             SET archived = ?, published = CASE WHEN ? = 1 THEN 0 ELSE published END,
                 catalog_revision = catalog_revision + 1
@@ -774,6 +1005,103 @@ export async function setActivityArchived(
   revalidatePath("/[locale]", "page");
   revalidatePath("/[locale]/d/[slug]", "page");
   revalidatePath("/[locale]/a/[slug]", "page");
+}
+
+/** Start a fresh sellable edition while keeping all historical orders intact. */
+export async function createActivityEdition(formData: FormData): Promise<void> {
+  await requireAdmin();
+  const activityId = str(formData.get("activity_id"));
+  const label = str(formData.get("edition_label"));
+  if (!activityId || !label) throw new Error("Cal indicar el nom de la nova edició.");
+
+  const db = await getDb();
+  const activity = await db
+    .prepare(
+      `SELECT a.id, a.current_edition_id, ae.location, ae.max_per_order
+         FROM activity a
+         JOIN activity_edition ae ON ae.id = a.current_edition_id
+        WHERE a.id = ?`,
+    )
+    .bind(activityId)
+    .first<{
+      id: string;
+      current_edition_id: string;
+      location: string | null;
+      max_per_order: number | null;
+    }>();
+  if (!activity) throw new Error("L'activitat no existeix.");
+  if (
+    await db
+      .prepare(`SELECT 1 FROM activity_edition WHERE activity_id = ? AND label = ?`)
+      .bind(activityId, label)
+      .first()
+  ) {
+    throw new Error("Ja existeix una edició amb aquest nom.");
+  }
+
+  const cancellation = await preparePendingCheckoutCancellation(db, activityId);
+  if ("error" in cancellation) throw new Error(cancellation.error);
+  const { results: variants } = await db
+    .prepare(
+      `SELECT name_ca, name_es, name_en, price_cents, stock, position
+         FROM variant
+        WHERE edition_id = ? AND active = 1 ORDER BY position`,
+    )
+    .bind(activity.current_edition_id)
+    .all<{
+      name_ca: string;
+      name_es: string | null;
+      name_en: string | null;
+      price_cents: number;
+      stock: number;
+      position: number;
+    }>();
+
+  const editionId = newId("ed");
+  await db.batch([
+    ...cancellation.statements,
+    db
+      .prepare(
+        `INSERT INTO activity_edition (
+           id, activity_id, label, location, max_per_order, published
+         ) VALUES (?, ?, ?, ?, ?, 0)`,
+      )
+      .bind(editionId, activityId, label, activity.location, activity.max_per_order),
+    ...variants.map((variant) =>
+      db
+        .prepare(
+          `INSERT INTO variant (
+             id, activity_id, edition_id, name_ca, name_es, name_en,
+             price_cents, stock, sold, position, active
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0, ?, 1)`,
+        )
+        .bind(
+          newId("var"),
+          activityId,
+          editionId,
+          variant.name_ca,
+          variant.name_es,
+          variant.name_en,
+          variant.price_cents,
+          variant.stock,
+          variant.position,
+        ),
+    ),
+    db
+      .prepare(
+        `UPDATE activity
+            SET current_edition_id = ?, edition = ?, starts_at = NULL,
+                published = 0, catalog_revision = catalog_revision + 1
+          WHERE id = ?`,
+      )
+      .bind(editionId, label, activityId),
+  ]);
+
+  revalidatePath("/admin/activities");
+  revalidatePath(`/admin/activities/${activityId}`);
+  revalidatePath("/[locale]", "page");
+  revalidatePath("/[locale]/a/[slug]", "page");
+  redirect(`/admin/activities/${activityId}`);
 }
 
 export async function deleteActivity(
@@ -795,11 +1123,25 @@ export async function deleteActivity(
     };
   }
 
+  const activityMedia = await db
+    .prepare(`SELECT poster_url, size_guide_image_url FROM activity WHERE id = ?`)
+    .bind(id)
+    .first<{ poster_url: string | null; size_guide_image_url: string | null }>();
+  const { results: galleryMedia } = await db
+    .prepare(`SELECT image_url FROM activity_image WHERE activity_id = ?`)
+    .bind(id)
+    .all<{ image_url: string }>();
+
   await db.batch([
     db.prepare(`DELETE FROM field WHERE activity_id = ?`).bind(id),
     db.prepare(`DELETE FROM variant WHERE activity_id = ?`).bind(id),
     db.prepare(`DELETE FROM activity_image WHERE activity_id = ?`).bind(id),
     db.prepare(`DELETE FROM activity WHERE id = ?`).bind(id),
+  ]);
+  await Promise.allSettled([
+    deleteMediaIfUnreferenced(db, activityMedia?.poster_url),
+    deleteMediaIfUnreferenced(db, activityMedia?.size_guide_image_url),
+    ...galleryMedia.map((image) => deleteMediaIfUnreferenced(db, image.image_url)),
   ]);
 
   revalidatePath("/admin/activities");

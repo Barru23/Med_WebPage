@@ -1,71 +1,80 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "xivarri",
-  "main": ".open-next/worker.js",
-  "compatibility_date": "2025-08-01",
-  // nodejs_compat: required by OpenNext for the Node.js runtime surface.
-  // global_fetch_strictly_public: OpenNext recommends this so server-side
-  // fetches to the site's own routes go back through the public internet
-  // path rather than short-circuiting.
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-
-  // The free <name>.<subdomain>.workers.dev address is the site's only home for
-  // now — no domain has been bought, and this is what Stripe's webhook will
-  // call. Safe here because /admin is guarded by the password in src/lib/auth.ts,
-  // which protects every hostname equally.
-  //
-  // If a Cloudflare Access application is ever added over "<domain>/admin*",
-  // set this back to false first: Access is configured per hostname, so leaving
-  // workers.dev reachable would hand out an unprotected way in.
-  "workers_dev": true,
-
-  // Static assets produced by the OpenNext build.
-  "assets": {
-    "binding": "ASSETS",
-    "directory": ".open-next/assets"
-  },
-
-  // ---- Bindings -----------------------------------------------------------
-  // D1: primary database (Department, Activity, Variant, Field, Order, ...).
-  // Created in WEUR — the buyers are in Girona, and D1's primary region decides
-  // how far every write travels. Wrangler's default put it in APAC.
-  // `next dev` ignores this id and uses a local SQLite file.
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "xivarri",
-      "database_id": "7eabaae1-e307-4ee4-a43e-18e36d4c92e8",
-      "migrations_dir": "migrations"
-    }
-  ],
-
-  // R2: posters and merch photos.
-  // Run `wrangler r2 bucket create xivarri-media` before first deploy.
-  "r2_buckets": [
-    {
-      "binding": "MEDIA",
-      "bucket_name": "xivarri-media"
-    }
-  ]
-
-  // ---- Secrets (never committed here) --------------------------------------
-  // Local dev: copy .dev.vars.example -> .dev.vars and fill in TEST keys.
-  // Deploy: `wrangler secret put STRIPE_SECRET_KEY` and
-  // `wrangler secret put STRIPE_WEBHOOK_SECRET`. Use TEST-mode keys until
-  // CLAUDE.md §11 step 6 says otherwise ("Live keys only after §9 is
-  // resolved" — §9's payment-recipient question is resolved as of the
-  // personal-account decision, but live keys are still a separate,
-  // deliberate step). Resend keys etc. join this list in a later step.
-
-  // ---- Admin auth (CLAUDE.md §3 / §7) --------------------------------------
-  // One shared password, set with `wrangler secret put ADMIN_PASSWORD`, and
-  // checked by src/lib/auth.ts in the admin layout, the export route handler
-  // and every admin server action. Nothing reaches /admin without it.
-  //
-  // Rotate it whenever someone leaves the team: the session cookie is signed
-  // with the password, so changing it logs everyone out at once.
-  //
-  // Optional second layer, recommended: a Cloudflare Access application over
-  // "<domain>/admin*" with an email allowlist. It costs no code and means a
-  // leaked password alone is not enough.
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "xivarri",
+	"main": "custom-worker.ts",
+	"compatibility_date": "2025-08-01",
+	// nodejs_compat: required by OpenNext for the Node.js runtime surface.
+	// global_fetch_strictly_public: OpenNext recommends this so server-side
+	// fetches to the site's own routes go back through the public internet
+	// path rather than short-circuiting.
+	"compatibility_flags": [
+		"nodejs_compat",
+		"global_fetch_strictly_public"
+	],
+	// The workers.dev address remains enabled until a definitive custom-domain
+	// policy is chosen. /admin is guarded by both the proxy and every data/action
+	// boundary, using a signed session independent of the login password.
+	//
+	// If a Cloudflare Access application is ever added over "<domain>/admin*",
+	// set this back to false first: Access is configured per hostname, so leaving
+	// workers.dev reachable would hand out an unprotected way in.
+	"workers_dev": true,
+	// Production configuration is managed in the Cloudflare dashboard. Keep
+	// those variables (relay URL, legal identity and checkout kill switch)
+	// when deploying new application versions with Wrangler.
+	"keep_vars": true,
+	// Static assets produced by the OpenNext build.
+	"assets": {
+		"binding": "ASSETS",
+		"directory": ".open-next/assets"
+	},
+	// ---- Bindings -----------------------------------------------------------
+	// D1: primary database (Department, Activity, Variant, Field, Order, ...).
+	// Created in WEUR — the buyers are in Girona, and D1's primary region decides
+	// how far every write travels. Wrangler's default put it in APAC.
+	// `next dev` ignores this id and uses a local SQLite file.
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "xivarri",
+			"database_id": "7eabaae1-e307-4ee4-a43e-18e36d4c92e8",
+			"migrations_dir": "migrations"
+		}
+	],
+	// R2: posters and merch photos.
+	// Run `wrangler r2 bucket create xivarri-media` before first deploy.
+	"r2_buckets": [
+		{
+			"binding": "MEDIA",
+			"bucket_name": "xivarri-media"
+		}
+	],
+	// Daily at 03:17 UTC. The custom Worker calls the authenticated maintenance
+	// route and propagates failures to Cloudflare's Cron Events log.
+	"triggers": {
+		"crons": ["17 3 * * *"]
+	},
+	"vars": {
+		"CHECKOUT_ENABLED": "true",
+		"LEGAL_CONTACT_EMAIL": "promocio14medicinaudg@gmail.com",
+		"LEGAL_CONTROLLER_NAME": "Promoció 14 Medicina UDG",
+		"PUBLIC_BASE_URL": "https://xivarri.xivarri.workers.dev",
+		"SHEETS_RELAY_URL": "https://script.google.com/macros/s/REDACTED_APPS_SCRIPT_ID/exec",
+		"TERMS_VERSION": "2026-09-10"
+	}
+	// ---- Secrets (never committed here) --------------------------------------
+	// Local dev: copy .dev.vars.example -> .dev.vars and fill in TEST keys.
+	// Deploy every value listed in .dev.vars.example with `wrangler secret put`.
+	// Keep CHECKOUT_ENABLED=false and use Stripe TEST keys until the checklist in
+	// docs/production-runbook.md is complete.
+	// ---- Admin auth (CLAUDE.md §3 / §7) --------------------------------------
+	// One shared password plus a separate ADMIN_SESSION_SECRET (32+ random
+	// characters), checked at the proxy and again at every protected boundary.
+	//
+	// Rotate both secrets whenever someone leaves the team. Rotating the session
+	// secret invalidates every open session immediately.
+	//
+	// Optional second layer, recommended: a Cloudflare Access application over
+	// "<domain>/admin*" with an email allowlist. It costs no code and means a
+	// leaked password alone is not enough.
 }

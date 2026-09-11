@@ -56,7 +56,9 @@ export default async function TicketPage({
   );
 
   const pending = ticket.order_status === "pending";
-  const inactive = ticket.order_status === "cancelled" || ticket.order_status === "refunded";
+  const disputed = ticket.dispute_status === "open";
+  const inactive =
+    disputed || ticket.order_status === "cancelled" || ticket.order_status === "refunded";
 
   return (
     <div className="mx-auto flex max-w-sm flex-col items-center px-5 py-10">
@@ -76,7 +78,7 @@ export default async function TicketPage({
 
         {inactive && (
           <div className="mt-6">
-            <Stamp>{ticket.order_status}</Stamp>
+            <Stamp>{t(`ticket.${disputed ? "disputed" : ticket.order_status}`)}</Stamp>
           </div>
         )}
 

@@ -72,7 +72,7 @@ export default function MediaEditor({
         <input
           type="file"
           name="gallery"
-          accept="image/*"
+        accept="image/jpeg,image/png,image/webp"
           multiple
           className="text-sm"
           onChange={(event) => {

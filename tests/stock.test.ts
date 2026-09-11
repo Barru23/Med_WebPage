@@ -1,9 +1,17 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { aggregateByVariant } from "../src/lib/orders.ts";
-import { migratedDb, seedActivity, soldOf, RESERVE_SQL, REFUND_SQL } from "./helpers/db.ts";
+import { migratedDb, seedActivity, RESERVE_SQL } from "./helpers/db.ts";
+import { AVAIL_EXPR } from "../src/lib/availability.ts";
 
 const FUTURE = "2099-01-01 00:00:00";
+
+function available(db: ReturnType<typeof migratedDb>, variantId: string): number {
+  return Number(
+    (db.prepare(`SELECT ${AVAIL_EXPR} AS value FROM variant v WHERE id = ?`)
+      .get(variantId) as { value: number }).value,
+  );
+}
 
 /** What submitOrder does once the lines are aggregated: one reservation per variant. */
 function reserve(
@@ -94,20 +102,26 @@ test("an expired hold releases the seat with no cleanup job", () => {
 test("a refund puts the seat back on sale", () => {
   const db = migratedDb();
   seedActivity(db, { stock: 100 });
-  db.prepare(`UPDATE variant SET sold = 5 WHERE id = 'var_bus'`).run();
-
-  db.prepare(REFUND_SQL).run(2, "var_bus");
-
-  assert.equal(soldOf(db, "var_bus"), 3, "refunding two seats returns two seats");
+  db.exec(`INSERT INTO "order" (id, activity_id, buyer_name, buyer_email, status)
+             VALUES ('ord_paid', 'act_1', 'Marta', 'm@example.com', 'paid');
+           INSERT INTO order_item (id, order_id, variant_id, quantity, ticket_code)
+             VALUES ('oi_paid', 'ord_paid', 'var_bus', 5, 'PAIDTEST');`);
+  assert.equal(available(db, "var_bus"), 95);
+  db.prepare(`UPDATE "order" SET status = 'refunded' WHERE id = 'ord_paid'`).run();
+  assert.equal(available(db, "var_bus"), 100, "a full refund releases every seat");
 });
 
-test("a refund never drives sold below zero", () => {
+test("repeating a payment transition cannot count seats twice", () => {
   const db = migratedDb();
-  seedActivity(db, { stock: 100 });
-  db.prepare(`UPDATE variant SET sold = 1 WHERE id = 'var_bus'`).run();
-
-  // The CHECK (sold >= 0) would otherwise abort the whole webhook batch.
-  db.prepare(REFUND_SQL).run(3, "var_bus");
-
-  assert.equal(soldOf(db, "var_bus"), 0);
+  seedActivity(db, { stock: 2 });
+  db.exec(`INSERT INTO "order" (id, activity_id, buyer_name, buyer_email, status)
+             VALUES ('ord_paid', 'act_1', 'Marta', 'm@example.com', 'pending');
+           INSERT INTO order_item (id, order_id, variant_id, quantity, ticket_code)
+             VALUES ('oi_paid', 'ord_paid', 'var_bus', 1, 'ONCEONLY');`);
+  const transition = db.prepare(
+    `UPDATE "order" SET status = 'paid' WHERE id = 'ord_paid' AND status = 'pending'`,
+  );
+  assert.equal(transition.run().changes, 1);
+  assert.equal(transition.run().changes, 0);
+  assert.equal(available(db, "var_bus"), 1);
 });

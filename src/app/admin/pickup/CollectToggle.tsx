@@ -1,7 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
-import { toggleCollected } from "@/lib/admin/actions/pickup";
+import { markCollected, undoCollected } from "@/lib/admin/actions/pickup";
 
 export default function CollectToggle({
   orderItemId,
@@ -16,7 +16,12 @@ export default function CollectToggle({
     <button
       type="button"
       disabled={pending}
-      onClick={() => startTransition(() => toggleCollected(orderItemId))}
+      onClick={() => {
+        if (collected && !window.confirm("Vols desfer la recollida?")) return;
+        startTransition(() =>
+          collected ? undoCollected(orderItemId) : markCollected(orderItemId),
+        );
+      }}
       className={collected ? "admin-btn admin-btn-primary text-xs" : "admin-btn text-xs"}
     >
       {collected ? "✓ Recollit" : "Marcar recollit"}

@@ -2,6 +2,7 @@ import ExcelJS from "exceljs";
 import { NextResponse, type NextRequest } from "next/server";
 import { getSalesExport } from "@/lib/admin/queries";
 import { isAdmin } from "@/lib/auth";
+import { formatDate } from "@/lib/format";
 
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pendent",
@@ -19,8 +20,9 @@ export async function GET(
 
   const { slug } = await params;
   const edition = req.nextUrl.searchParams.get("edition") ?? undefined;
+  const includeAll = req.nextUrl.searchParams.get("include") === "all";
 
-  const data = await getSalesExport(slug, edition);
+  const data = await getSalesExport(slug, edition, includeAll);
   if (!data) return new NextResponse("Not found", { status: 404 });
   const { activity, fields, rows } = data;
   // Merch is collected at a table; events and trips are checked in at a door.
@@ -38,6 +40,7 @@ export async function GET(
     { header: "Quantitat", key: "quantity", width: 10 },
     { header: "Codi", key: "ticket_code", width: 10 },
     { header: "Estat", key: "status", width: 12 },
+    { header: "Disputa", key: "dispute_status", width: 12 },
     isMerch
       ? { header: "Recollit", key: "collected_at", width: 18 }
       : { header: "Check-in", key: "checked_in_at", width: 18 },
@@ -45,6 +48,7 @@ export async function GET(
     // La prova de l'acceptació ha de viure al document que us descarregueu,
     // no només dins la base de dades.
     { header: "Condicions acceptades", key: "terms_accepted_at", width: 20 },
+    { header: "Versió condicions", key: "terms_version", width: 18 },
     ...fields.map((f) => ({ header: f.label_ca, key: f.id, width: 18 })),
   ];
   sheet.getRow(1).font = { bold: true };
@@ -66,10 +70,12 @@ export async function GET(
       quantity: row.quantity,
       ticket_code: row.ticket_code,
       status: STATUS_LABELS[row.status] ?? row.status,
-      checked_in_at: row.checked_in_at ?? "",
-      collected_at: row.collected_at ?? "",
-      created_at: row.created_at,
-      terms_accepted_at: row.terms_accepted_at ?? "",
+      dispute_status: row.dispute_status === "none" ? "" : row.dispute_status,
+      checked_in_at: formatDate(row.checked_in_at, "ca") ?? "",
+      collected_at: formatDate(row.collected_at, "ca") ?? "",
+      created_at: formatDate(row.created_at, "ca") ?? row.created_at,
+      terms_accepted_at: formatDate(row.terms_accepted_at, "ca") ?? "",
+      terms_version: row.terms_version ?? "",
       ...Object.fromEntries(fields.map((f) => [f.id, answers[f.id] ?? ""])),
     });
   }

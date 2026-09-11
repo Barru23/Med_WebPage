@@ -18,8 +18,23 @@ export const HELD_BY_STRIPE = `(
      AND sr.expires_at > datetime('now')
 )`;
 
+/**
+ * Confirmed units for this variant and edition. `variant.sold` is retained for
+ * migration compatibility, but it is no longer inventory authority: deriving
+ * the value from paid orders makes Stripe retries and refunds idempotent.
+ * Requires alias `v`.
+ */
+export const SOLD_FROM_ORDERS = `(
+  SELECT COALESCE(SUM(oi.quantity), 0)
+    FROM order_item oi
+    JOIN "order" paid_order ON paid_order.id = oi.order_id
+   WHERE oi.variant_id = v.id
+     AND paid_order.status = 'paid'
+     AND (v.edition_id IS NULL OR paid_order.activity_edition_id = v.edition_id)
+)`;
+
 /** SQL expression for a variant's true remaining count. Requires alias `v`. */
-export const AVAIL_EXPR = `MAX(v.stock - v.sold - ${HELD_BY_STRIPE}, 0)`;
+export const AVAIL_EXPR = `MAX(v.stock - ${SOLD_FROM_ORDERS} - ${HELD_BY_STRIPE}, 0)`;
 
 /** Whether a variant may be bought at this instant. Requires alias `v`. */
 export const ON_SALE_EXPR = `(

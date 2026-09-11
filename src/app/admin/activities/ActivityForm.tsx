@@ -163,6 +163,15 @@ export default function ActivityForm({
           />
         </label>
         <label className="block">
+          <span className="admin-label">Final</span>
+          <input
+            type="datetime-local"
+            className="admin-input"
+            name="ends_at"
+            defaultValue={toInputDatetime(activity?.ends_at ?? null)}
+          />
+        </label>
+        <label className="block">
           <span className="admin-label">Lloc</span>
           <input className="admin-input" name="location" defaultValue={activity?.location ?? ""} />
         </label>
@@ -182,6 +191,7 @@ export default function ActivityForm({
             name="max_per_order"
             type="number"
             min={1}
+            max={100}
             placeholder="sense límit"
             defaultValue={activity?.max_per_order ?? ""}
           />
@@ -198,7 +208,7 @@ export default function ActivityForm({
               className="mb-1 h-10 w-10 border border-sand object-cover"
             />
           )}
-          <input type="file" name="poster" accept="image/*" className="text-xs" />
+          <input type="file" name="poster" accept="image/jpeg,image/png,image/webp" className="text-xs" />
         </label>
       </div>
 

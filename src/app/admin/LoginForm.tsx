@@ -35,8 +35,9 @@ export default function LoginForm({ configured }: { configured: boolean }) {
         </form>
       ) : (
         <p className="mt-6 font-body text-sm text-ink/70">
-          Aquest administrador encara no té contrasenya configurada. Cal definir el secret{" "}
-          <code className="font-mono text-xs">ADMIN_PASSWORD</code> abans de poder entrar.
+          Aquest administrador encara no té les credencials configurades. Cal definir els secrets{" "}
+          <code className="font-mono text-xs">ADMIN_PASSWORD</code> i{" "}
+          <code className="font-mono text-xs">ADMIN_SESSION_SECRET</code> abans de poder entrar.
         </p>
       )}
     </div>

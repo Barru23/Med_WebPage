@@ -20,12 +20,15 @@ export class FakeSheet {
   private maxRows = 1000;
 
   private readonly name: string;
+  private readonly id: number;
 
-  constructor(name: string) {
+  constructor(name: string, id: number) {
     this.name = name;
+    this.id = id;
   }
 
   getName() { return this.name; }
+  getSheetId() { return this.id; }
   getMaxColumns() { return this.maxCols; }
   getMaxRows() { return this.maxRows; }
   insertColumnsAfter(_after: number, count: number) { this.maxCols += count; }
@@ -34,6 +37,7 @@ export class FakeSheet {
   getLastColumn() { return this.rows.reduce((max, row) => Math.max(max, row.length), 0); }
   setFrozenRows() {}
   autoResizeColumns() {}
+  deleteRow(row: number) { this.rows.splice(row - 1, 1); }
 
   appendRow(values: unknown[]) {
     if (values.length > this.maxCols) throw new Error("out of bounds (columns)");
@@ -43,6 +47,8 @@ export class FakeSheet {
   getRange(row: number, col: number, numRows: number, numCols: number) {
     if (col + numCols - 1 > this.maxCols) throw new Error("out of bounds (columns)");
     if (row + numRows - 1 > this.maxRows) throw new Error("out of bounds (rows)");
+    // The range methods deliberately retain their parent fake sheet.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     const sheet = this;
     const range = {
       getValues() {
@@ -56,6 +62,18 @@ export class FakeSheet {
           const target = (sheet.rows[row - 1 + r] ??= []);
           values_.forEach((value, c) => { target[col - 1 + c] = value; });
         });
+        return range;
+      },
+      setValue(value: unknown) {
+        const target = (sheet.rows[row - 1] ??= []);
+        target[col - 1] = value;
+        return range;
+      },
+      clearContent() {
+        for (let r = 0; r < numRows; r++) {
+          const target = (sheet.rows[row - 1 + r] ??= []);
+          for (let c = 0; c < numCols; c++) target[col - 1 + c] = "";
+        }
         return range;
       },
       setFontWeight() { return range; },
@@ -88,6 +106,8 @@ export interface RelayHarness {
   post(payload: unknown): { ok: boolean; [key: string]: unknown };
   sheet(name: string): FakeSheet | undefined;
   mails: SentMail[];
+  failNextMail(): void;
+  runRetentionCleanup(): void;
   secret: string;
   /** What the script itself would call the tab, for cross-checking `sheetTabName`. */
   tabNameFromScript(activity: string, edition?: string | null): string;
@@ -98,22 +118,35 @@ const SCRIPT = join(import.meta.dirname, "..", "..", "apps-script", "Codi.gs");
 export function loadRelayScript(): RelayHarness {
   const sheets = new Map<string, FakeSheet>();
   const mails: SentMail[] = [];
+  let pendingMailFailures = 0;
+  let nextSheetId = 1;
   const secret = "test-secret";
 
   const spreadsheet = {
     getSheetByName: (name: string) => sheets.get(name) ?? null,
+    getSheetById: (id: number) => [...sheets.values()].find((sheet) => sheet.getSheetId() === id) ?? null,
     insertSheet(name: string) {
-      const sheet = new FakeSheet(name);
+      const sheet = new FakeSheet(name, nextSheetId++);
       sheets.set(name, sheet);
       return sheet;
     },
+    deleteSheet(sheet: FakeSheet) { sheets.delete(sheet.getName()); },
   };
 
   const sandbox = {
     console: { error() {}, log() {} },
     LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, flush() {} },
-    MailApp: { sendEmail: (mail: SentMail) => mails.push(mail) },
+    ScriptApp: { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create() {} }) }) }) }) },
+    MailApp: {
+      sendEmail: (mail: SentMail) => {
+        if (pendingMailFailures > 0) {
+          pendingMailFailures--;
+          throw new Error("mail quota exhausted");
+        }
+        mails.push(mail);
+      },
+    },
     ContentService: {
       MimeType: { JSON: "json" },
       createTextOutput(text: string) {
@@ -144,6 +177,10 @@ export function loadRelayScript(): RelayHarness {
       }).nomPestanya({ activity, edition });
     },
     mails,
+    failNextMail() { pendingMailFailures++; },
+    runRetentionCleanup() {
+      (sandbox as unknown as { runRetentionCleanup(): void }).runRetentionCleanup();
+    },
     secret,
   };
 }

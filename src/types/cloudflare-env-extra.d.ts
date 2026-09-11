@@ -4,8 +4,15 @@
 // interface by declaration merging.
 interface CloudflareEnv {
   ADMIN_PASSWORD: string;
+  ADMIN_SESSION_SECRET?: string;
   STRIPE_SECRET_KEY: string;
   STRIPE_WEBHOOK_SECRET: string;
+  PUBLIC_BASE_URL?: string;
+  CHECKOUT_ENABLED?: string;
+  TERMS_VERSION?: string;
+  MAINTENANCE_SECRET?: string;
+  LEGAL_CONTROLLER_NAME?: string;
+  LEGAL_CONTACT_EMAIL?: string;
   // Optional: the site runs without the relay, it just does not email or
   // mirror to the sheet.
   SHEETS_RELAY_URL?: string;
