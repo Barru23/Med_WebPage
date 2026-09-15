@@ -30,7 +30,13 @@ var SECRET = 'ENGANXA_AQUI_EL_SECRET';
 // Columnes fixes, abans i després de les preguntes de cada activitat.
 // El codi va primer perquè és el que es busca a la porta.
 var COLUMNES_INICI = ['codi', 'comprador', 'correu', 'telefon', 'modalitat', 'unitats', 'preu_eur'];
-var COLUMNES_FINAL = ['pagat_el', 'total_comanda_eur', 'metode', 'order_id', 'enllac'];
+var COLUMNES_FINAL = ['pagat_el', 'order_id', 'enllac'];
+
+// Hi falten a posta el total de la comanda i el mètode de pagament. La fila és
+// per entrada, i el total hi sortia repetit a cadascuna: qui sumava la columna
+// d'una comanda de dues entrades de 5 € en veia 20. El diner que sí que quadra
+// per fila ja hi és — preu_eur × unitats — i la xifra bona de debò és la de la
+// pantalla de Vendes.
 
 // Deliberadament NO hi ha columnes de "ha entrat" ni "ha recollit": la fila
 // s'escriu un sol cop, en pagar, i es quedarien congelades mentint la nit de
@@ -341,6 +347,9 @@ function escriureFiles(full, dades) {
       unitats: item.quantity || 0,
       preu_eur: item.unit_price_eur || 0,
       pagat_el: dades.paid_at || '',
+      // Aquests dos ja no són capçaleres noves, però les pestanyes obertes abans
+      // del canvi encara tenen les columnes: mentre hi siguin s'omplen, i no es
+      // queden a mitges. El dia que les esborreu a mà, no tornen.
       total_comanda_eur: dades.total_eur || 0,
       metode: dades.payment_method || '',
       order_id: dades.order_id,
