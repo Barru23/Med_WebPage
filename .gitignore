@@ -45,3 +45,4 @@ Thumbs.db
 
 # neteja puntual de dades de prova, no forma part del projecte
 neteja-comandes-prova.sql
+output/pdf/
