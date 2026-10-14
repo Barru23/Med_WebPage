@@ -21,11 +21,19 @@
  *   - Idempotent per order_id: si Stripe reintenta, no es dupliquen files.
  *   - No exposa res: només accepta POST amb el secret correcte i no retorna
  *     mai cap dada del full.
+ *   - El secret es llegeix de les propietats de l'script, mai d'aquest codi,
+ *     i es comprova abans de bloquejar res.
  */
 
-// Ha de coincidir amb el secret SHEETS_RELAY_SECRET de Cloudflare.
-// Canvia'l per una cadena llarga i aleatòria abans de desplegar.
-var SECRET = 'ENGANXA_AQUI_EL_SECRET';
+// El secret NO viu en aquest fitxer, que és públic. Es desa a l'editor
+// d'Apps Script: Configuració del projecte → Propietats de l'script, amb
+// aquest nom i el mateix valor que SHEETS_RELAY_SECRET a Cloudflare.
+var PROPIETAT_SECRET = 'SHEETS_RELAY_SECRET';
+
+// Columnes que porten text escrit per algú altre (el comprador o qui va crear
+// l'activitat). Es formaten com a text pla perquè Sheets no les avaluï mai.
+// Les preguntes personalitzades s'hi afegeixen per a cada comanda.
+var COLUMNES_TEXT_LLIURE = ['comprador', 'correu', 'telefon', 'modalitat'];
 
 // Columnes fixes, abans i després de les preguntes de cada activitat.
 // El codi va primer perquè és el que es busca a la porta.
@@ -43,7 +51,43 @@ var COLUMNES_FINAL = ['pagat_el', 'order_id', 'enllac'];
 // l'activitat. L'estat real viu a la pantalla de Porta i a l'Excel que es
 // descarrega des de Vendes, que sempre estan al dia.
 
+/** El secret desat a les propietats de l'script, o null si no s'hi ha posat. */
+function secretConfigurat() {
+  var valor = PropertiesService.getScriptProperties().getProperty(PROPIETAT_SECRET);
+  return valor ? String(valor) : null;
+}
+
+/** Comparació que triga el mateix tant si l'error és al primer caràcter com a l'últim. */
+function igualSegur(a, b) {
+  var diferencia = a.length ^ b.length;
+  for (var i = 0; i < Math.max(a.length, b.length); i++) {
+    diferencia |= (a.charCodeAt(i) || 0) ^ (b.charCodeAt(i) || 0);
+  }
+  return diferencia === 0;
+}
+
 function doPost(e) {
+  // L'autenticació va ABANS del lock. La URL /exec és pública per força
+  // ("Qualsevol" hi té accés), i si el lock s'agafés primer, una pluja de
+  // peticions falses el mantindria ocupat i les comandes de debò rebrien
+  // "ocupat". Així, qui no porta el secret surt sense haver esperat res.
+  // Apps Script no deixa llegir capçaleres HTTP, per això el secret va al cos
+  // i no en una capçalera Authorization.
+  var dades;
+  try {
+    dades = JSON.parse(e && e.postData ? e.postData.contents : '');
+  } catch (err) {
+    return json({ ok: false, error: 'no autoritzat' });
+  }
+  var secret = secretConfigurat();
+  if (!secret) console.error('Falta la propietat de l\'script ' + PROPIETAT_SECRET);
+  if (!secret || !dades || typeof dades.secret !== 'string' || !igualSegur(dades.secret, secret)) {
+    return json({ ok: false, error: 'no autoritzat' });
+  }
+  if (!dades.order_id) {
+    return json({ ok: false, error: 'falta order_id' });
+  }
+
   var lock = LockService.getScriptLock();
   // Dues entregues simultànies de Stripe no poden escriure alhora.
   try {
@@ -53,15 +97,6 @@ function doPost(e) {
   }
 
   try {
-    var dades = JSON.parse(e.postData.contents);
-
-    if (!dades.secret || dades.secret !== SECRET) {
-      return json({ ok: false, error: 'no autoritzat' });
-    }
-    if (!dades.order_id) {
-      return json({ ok: false, error: 'falta order_id' });
-    }
-
     var canals = Array.isArray(dades.channels) ? dades.channels : ['sheet', 'email'];
     var resultatFull = { sent: false, skipped: canals.indexOf('sheet') === -1 };
     var resultatCorreu = { sent: false, skipped: canals.indexOf('email') === -1 };
@@ -293,10 +328,17 @@ function ferLloc(full, columnes, files) {
  * "=IMPORTXML(...)" s'executaria sol el dia que una organitzadora obrís el
  * full, amb els DNI i les al·lèrgies a la mateixa pestanya. Un apòstrof al
  * davant ho deixa en text: es veu igual i no s'avalua.
+ *
+ * Abans es treuen els espais, tabuladors i salts de línia del davant: "\t=..."
+ * o " =..." també poden acabar avaluant-se, i ningú escriu el nom amb un
+ * tabulador a propòsit. També es cobreixen les variants d'amplada completa
+ * (＝ ＋ － ＠). És una segona barrera: escriureFiles ja formata aquestes
+ * columnes com a text pla abans d'escriure-hi.
  */
 function textSegur(valor) {
   if (typeof valor !== 'string') return valor;
-  return /^[=+@-]/.test(valor) ? "'" + valor : valor;
+  var net = valor.replace(/^[\s\u0000-\u001F]+/, '');
+  return /^[=+\-@＝＋－＠]/.test(net) ? "'" + net : net;
 }
 
 /**
@@ -371,7 +413,20 @@ function escriureFiles(full, dades) {
   if (!files.length) return;
 
   ferLloc(full, columnes.length, files.length);
-  full.getRange(full.getLastRow() + 1, 1, files.length, columnes.length).setValues(files);
+  var filaInici = full.getLastRow() + 1;
+
+  // Text pla a les columnes que omple algú altre, ABANS d'escriure-hi: així
+  // Sheets les desa tal com arriben i no intenta interpretar-les. Les dates,
+  // els preus i les unitats es deixen en format automàtic perquè es puguin
+  // ordenar i sumar.
+  var textuals = COLUMNES_TEXT_LLIURE.concat(dades.field_labels || []);
+  columnes.forEach(function (columna, index) {
+    if (textuals.indexOf(columna) !== -1) {
+      full.getRange(filaInici, index + 1, files.length, 1).setNumberFormat('@');
+    }
+  });
+
+  full.getRange(filaInici, 1, files.length, columnes.length).setValues(files);
   SpreadsheetApp.flush();
 }
 
@@ -510,7 +565,7 @@ function provaLocal() {
   var resultat = doPost({
     postData: {
       contents: JSON.stringify({
-        secret: SECRET,
+        secret: secretConfigurat(),
         order_id: 'ord_prova_' + Date.now(),
         paid_at: '2026-01-01 20:00:00',
         buyer_name: 'Prova Prova',

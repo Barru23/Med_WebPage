@@ -9,17 +9,32 @@ import { getStripe } from "@/lib/stripe";
 import { newId, newTicketCode } from "@/lib/ids";
 import { AVAIL_EXPR, ON_SALE_EXPR } from "@/lib/availability";
 import { utcNow } from "@/lib/time";
-import { aggregateByVariant, totalUnits } from "@/lib/orders";
+import {
+  MAX_UNITS_PER_ORDER,
+  aggregateByVariant,
+  effectiveMaxPerOrder,
+  totalUnits,
+} from "@/lib/orders";
 import { serviceFeeCents } from "@/lib/fees";
 import { syncOrderToRelay } from "@/lib/relay";
 import { hasRequiredLegalIdentity } from "@/lib/legalConfig";
+import { clientKey } from "@/lib/requestClient";
+import {
+  FREE_EMAIL_HELD,
+  FREE_EMAILS_SENT_SQL,
+  MAX_PENDING_PER_CLIENT,
+  PENDING_FOR_CLIENT_SQL,
+  freeEmailAllowed,
+  hashClientKey,
+} from "@/lib/checkoutLimits";
 import type { Locale } from "@/lib/locales";
 
 const STRIPE_SESSION_MS = 30 * 60 * 1000;
 // Stripe may confirm a payment after the browser session expires. Keep the
 // local hold a little longer so webhook latency cannot sell the same seat.
+// src/lib/checkoutLimits.ts counts pending holds over this same window.
 const HOLD_MS = STRIPE_SESSION_MS + 15 * 60 * 1000;
-const MAX_CHECKOUT_UNITS = 100;
+const MAX_CHECKOUT_UNITS = MAX_UNITS_PER_ORDER;
 const MAX_CHECKOUT_PAYLOAD = 100_000;
 const MAX_LEN = { name: 120, email: 200, phone: 40, answer: 500 } as const;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -49,6 +64,7 @@ const CHECKOUT_COPY = {
     soldOut: "No queden prou places de «{variant}».",
     stock: "No queden prou unitats disponibles. Torna-ho a provar.",
     stripe: "No s'ha pogut connectar amb Stripe. Torna-ho a provar.",
+    holds: "Hi ha massa compres sense acabar des d'aquesta connexió. Acaba o tanca les que tens obertes, o espera uns minuts.",
   },
   es: {
     paused: "Las ventas están temporalmente pausadas.",
@@ -68,6 +84,7 @@ const CHECKOUT_COPY = {
     soldOut: "No quedan suficientes plazas de «{variant}».",
     stock: "No quedan suficientes unidades. Inténtalo de nuevo.",
     stripe: "No se ha podido conectar con Stripe. Inténtalo de nuevo.",
+    holds: "Hay demasiadas compras sin terminar desde esta conexión. Termina o cierra las que tienes abiertas, o espera unos minutos.",
   },
   en: {
     paused: "Sales are temporarily paused.",
@@ -87,6 +104,7 @@ const CHECKOUT_COPY = {
     soldOut: "There are not enough places left for “{variant}”.",
     stock: "There are not enough units left. Try again.",
     stripe: "Stripe could not be reached. Try again.",
+    holds: "Too many unfinished checkouts from this connection. Finish or close the ones you have open, or wait a few minutes.",
   },
 } as const;
 
@@ -306,8 +324,10 @@ export async function submitOrder(
     }>();
   if (!activity) return { error: checkoutMessage(locale, "unavailable") };
 
-  if (activity.max_per_order && totalUnits(parsedLines) > activity.max_per_order) {
-    return { error: checkoutMessage(locale, "max", { n: activity.max_per_order }) };
+  // A blank limit means DEFAULT_MAX_PER_ORDER, never "anything up to 100".
+  const maxPerOrder = effectiveMaxPerOrder(activity.max_per_order);
+  if (totalUnits(parsedLines) > maxPerOrder) {
+    return { error: checkoutMessage(locale, "max", { n: maxPerOrder }) };
   }
 
   const { results: fields } = await db
@@ -378,6 +398,17 @@ export async function submitOrder(
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  }
+
+  // Counted after the buyer's own abandoned holds were released above, so
+  // someone retrying their own purchase is never blocked by it.
+  const clientHash = await hashClientKey(await clientKey());
+  const openHolds = await db
+    .prepare(PENDING_FOR_CLIENT_SQL)
+    .bind(clientHash, activity.edition_id)
+    .first<{ n: number }>();
+  if ((openHolds?.n ?? 0) >= MAX_PENDING_PER_CLIENT) {
+    return { error: checkoutMessage(locale, "holds") };
   }
 
   const wanted = aggregateByVariant(lines);
@@ -463,8 +494,8 @@ export async function submitOrder(
            id, activity_id, activity_edition_id, edition,
            buyer_name, buyer_email, buyer_phone,
            total_cents, fee_cents, currency, status, payment_method,
-           locale, terms_accepted_at, terms_version, created_at
-         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', 'pending', ?, ?, ?, ?, datetime('now'))`,
+           locale, terms_accepted_at, terms_version, client_key, created_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'EUR', 'pending', ?, ?, ?, ?, ?, datetime('now'))`,
       )
       .bind(
         orderId,
@@ -480,6 +511,7 @@ export async function submitOrder(
         locale,
         termsAcceptedAt,
         config.termsVersion,
+        clientHash,
       ),
   ];
 
@@ -576,6 +608,26 @@ export async function submitOrder(
     return { error: checkoutMessage(locale, "stock") };
   }
 
+  // The count before the insert can be raced by requests fired in parallel,
+  // so it is taken again now that this order is one of them. Over the cap,
+  // this order gives its hold straight back.
+  const holdsNow = await db
+    .prepare(PENDING_FOR_CLIENT_SQL)
+    .bind(clientHash, activity.edition_id)
+    .first<{ n: number }>();
+  if ((holdsNow?.n ?? 0) > MAX_PENDING_PER_CLIENT) {
+    await db.batch([
+      db.prepare(`UPDATE "order" SET status = 'cancelled' WHERE id = ?`).bind(orderId),
+      db
+        .prepare(
+          `UPDATE stock_reservation SET expires_at = datetime('now')
+            WHERE order_id = ? AND consumed_at IS NULL`,
+        )
+        .bind(orderId),
+    ]);
+    return { error: checkoutMessage(locale, "holds") };
+  }
+
   let destination = codes.length === 1
     ? `/${locale}/t/${codes[0]}`
     : `/${locale}/o/${orderId}`;
@@ -620,7 +672,23 @@ export async function submitOrder(
       ]);
       return { error: checkoutMessage(locale, "changed") };
     }
-    await syncOrderToRelay(orderId, config.origin);
+    // A free order is emailed the moment it exists, from the shared Gmail and
+    // its ~100-a-day quota, to whatever address the form was given. Past the
+    // caps the order still stands and its code is on screen; only the email
+    // waits on Operations for an admin.
+    const sent = await db
+      .prepare(FREE_EMAILS_SENT_SQL)
+      .bind(clientHash)
+      .first<{ total: number; mine: number }>();
+    if (freeEmailAllowed({ total: sent?.total ?? 0, mine: sent?.mine ?? 0 })) {
+      await syncOrderToRelay(orderId, config.origin);
+    } else {
+      await syncOrderToRelay(orderId, config.origin, ["sheet"]);
+      await db
+        .prepare(`UPDATE "order" SET relay_last_error = ? WHERE id = ?`)
+        .bind(FREE_EMAIL_HELD, orderId)
+        .run();
+    }
   } else {
     try {
       const stripe = await getStripe();

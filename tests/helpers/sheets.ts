@@ -16,6 +16,8 @@ import { createContext, runInContext } from "node:vm";
  */
 export class FakeSheet {
   readonly rows: unknown[][] = [];
+  /** Number formats set on single cells, keyed "row,col" (1-based). */
+  readonly formats = new Map<string, string>();
   private maxCols = 26;
   private maxRows = 1000;
 
@@ -77,6 +79,12 @@ export class FakeSheet {
         return range;
       },
       setFontWeight() { return range; },
+      setNumberFormat(format: string) {
+        for (let r = 0; r < numRows; r++) {
+          for (let c = 0; c < numCols; c++) sheet.formats.set(`${row + r},${col + c}`, format);
+        }
+        return range;
+      },
     };
     return range;
   }
@@ -84,6 +92,11 @@ export class FakeSheet {
   /** The header row, as the script actually left it. */
   headers(): string[] {
     return this.getRange(1, 1, 1, this.getLastColumn()).getValues()[0].map(String);
+  }
+
+  /** The number format of one cell, found by header, or undefined if left automatic. */
+  formatAt(rowIndex: number, header: string): string | undefined {
+    return this.formats.get(`${rowIndex},${this.headers().indexOf(header) + 1}`);
   }
 
   /** One data row keyed by header, which is how a human reads the sheet. */
@@ -109,6 +122,10 @@ export interface RelayHarness {
   failNextMail(): void;
   runRetentionCleanup(): void;
   secret: string;
+  /** How many times the script has taken its lock. */
+  locksTaken(): number;
+  /** Remove the secret from the script properties, as on a fresh deployment. */
+  forgetSecret(): void;
   /** What the script itself would call the tab, for cross-checking `sheetTabName`. */
   tabNameFromScript(activity: string, edition?: string | null): string;
 }
@@ -120,7 +137,11 @@ export function loadRelayScript(): RelayHarness {
   const mails: SentMail[] = [];
   let pendingMailFailures = 0;
   let nextSheetId = 1;
+  let locks = 0;
   const secret = "test-secret";
+  // The deployed copy reads its secret from the script properties; here we
+  // put the same one both sides of the call use.
+  const properties = new Map<string, string>([["SHEETS_RELAY_SECRET", secret]]);
 
   const spreadsheet = {
     getSheetByName: (name: string) => sheets.get(name) ?? null,
@@ -135,7 +156,10 @@ export function loadRelayScript(): RelayHarness {
 
   const sandbox = {
     console: { error() {}, log() {} },
-    LockService: { getScriptLock: () => ({ waitLock() {}, releaseLock() {} }) },
+    LockService: { getScriptLock: () => ({ waitLock() { locks++; }, releaseLock() {} }) },
+    PropertiesService: {
+      getScriptProperties: () => ({ getProperty: (key: string) => properties.get(key) ?? null }),
+    },
     SpreadsheetApp: { getActiveSpreadsheet: () => spreadsheet, flush() {} },
     ScriptApp: { getProjectTriggers: () => [], newTrigger: () => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create() {} }) }) }) }) },
     MailApp: {
@@ -159,9 +183,6 @@ export function loadRelayScript(): RelayHarness {
 
   createContext(sandbox);
   runInContext(readFileSync(SCRIPT, "utf8"), sandbox);
-  // The deployed copy carries the real secret; here we set the same one both
-  // sides of the call use.
-  runInContext(`SECRET = ${JSON.stringify(secret)};`, sandbox);
 
   return {
     post(payload) {
@@ -182,5 +203,7 @@ export function loadRelayScript(): RelayHarness {
       (sandbox as unknown as { runRetentionCleanup(): void }).runRetentionCleanup();
     },
     secret,
+    locksTaken: () => locks,
+    forgetSecret() { properties.clear(); },
   };
 }

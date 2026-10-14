@@ -2,11 +2,8 @@
 
 import { redirect } from "next/navigation";
 import { passwordMatches, startSession, endSession } from "@/lib/auth";
-import {
-  clientIp,
-  consumeLoginAttempt,
-  clearAttempts,
-} from "@/lib/loginRate";
+import { consumeLoginAttempt, clearAttempts } from "@/lib/loginRate";
+import { clientKey } from "@/lib/requestClient";
 
 export type LoginState = { error?: string } | null;
 
@@ -14,8 +11,8 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   const password = String(formData.get("password") ?? "");
   if (!password) return { error: "Escriu la contrasenya." };
 
-  const ip = await clientIp();
-  if (await consumeLoginAttempt(ip)) {
+  const key = await clientKey();
+  if (await consumeLoginAttempt(key)) {
     return { error: "Massa intents. Espera un quart d'hora i torna-ho a provar." };
   }
 
@@ -26,7 +23,7 @@ export async function login(_prev: LoginState, formData: FormData): Promise<Logi
   if (!(await startSession())) {
     return { error: "L'accés no està configurat. Avisa qui gestiona el web." };
   }
-  await clearAttempts(ip);
+  await clearAttempts(key);
   redirect("/admin/activities");
 }
 

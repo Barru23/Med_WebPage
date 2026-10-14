@@ -16,7 +16,6 @@
     "db:migrate:local": "wrangler d1 migrations apply xivarri --local",
     "db:migrate": "wrangler d1 migrations apply xivarri --remote",
     "db:seed:local": "wrangler d1 execute xivarri --local --file=./seed.sql",
-    "db:seed": "wrangler d1 execute xivarri --remote --file=./seed.sql",
     "test": "node --experimental-strip-types --test \"tests/**/*.test.ts\""
   },
   "dependencies": {

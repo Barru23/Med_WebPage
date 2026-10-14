@@ -24,6 +24,24 @@ export function aggregateByVariant(lines: readonly OrderLine[]): Map<string, num
   return totals;
 }
 
+/**
+ * Units one order may take when the admin leaves "Màxim per compra" blank.
+ *
+ * Blank used to mean "no limit", which let a single request hold up to the
+ * hard ceiling below for the whole life of a Stripe session. Ten covers a
+ * group of friends; an activity that genuinely needs more sets it explicitly.
+ */
+export const DEFAULT_MAX_PER_ORDER = 10;
+
+/** Absolute ceiling on units per order, whatever an activity is set to. */
+export const MAX_UNITS_PER_ORDER = 100;
+
+/** The cap that actually applies to one order, given the edition's setting. */
+export function effectiveMaxPerOrder(limit: number | null | undefined): number {
+  const configured = limit && limit > 0 ? limit : DEFAULT_MAX_PER_ORDER;
+  return Math.min(configured, MAX_UNITS_PER_ORDER);
+}
+
 /** Units across the whole order, for the per-buyer cap on an Activity. */
 export function totalUnits(lines: readonly OrderLine[]): number {
   return lines.reduce((sum, line) => sum + line.quantity, 0);

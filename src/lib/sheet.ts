@@ -7,17 +7,35 @@
  * sync breaks. Anything that has to be right — a coach manifest, a size count
  * — comes from the Excel.
  *
- * The address lives in the code rather than in a Cloudflare secret because it
- * is not a credential: the sheet is shared with named organisers, not by link.
- * A secret would buy nothing here and would add one more thing that can be
- * uploaded empty and silently leave a dead button on the Sales screen. If this
- * repository ever stops being private, move it to a secret.
+ * The address comes from the Cloudflare variable LIVE_SHEET_URL, never from
+ * this file: the repository is public and the sheet holds DNIs and allergies.
+ * Sharing must still be restricted to named organisers — the id is not a
+ * credential, only a pointer — but there is no reason to hand the pointer out.
  *
  * This module deliberately imports nothing, so the tests can cross-check the
  * tab name against the real `apps-script/Codi.gs`.
  */
-export const LIVE_SHEET_URL =
-  "https://docs.google.com/spreadsheets/d/REDACTED_SHEET_ID/edit";
+
+// Google's spreadsheet ids are long URL-safe tokens. A shorter value is a
+// typo or a placeholder, not a sheet.
+const SHEET_ID = /^[A-Za-z0-9_-]{20,}$/;
+const SHEET_URL = /\/spreadsheets\/d\/([A-Za-z0-9_-]+)/;
+
+/**
+ * The link the Sales screen opens, built from LIVE_SHEET_URL.
+ *
+ * Accepts either the bare id or the full address copied from the browser bar
+ * (whatever tab or `#gid` it was on), and always answers with the canonical
+ * edit URL. Returns null when the value is missing or unrecognisable, so the
+ * screen can say so instead of linking somewhere wrong.
+ */
+export function liveSheetUrl(raw: string | undefined | null): string | null {
+  const value = raw?.trim();
+  if (!value) return null;
+  const id = SHEET_ID.test(value) ? value : value.match(SHEET_URL)?.[1];
+  if (!id || !SHEET_ID.test(id)) return null;
+  return `https://docs.google.com/spreadsheets/d/${id}/edit`;
+}
 
 /**
  * The tab an activity's orders land on, e.g. "Medifutbol — Tardor 2026".

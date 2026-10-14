@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
 
+# The repository is public: workflows only ever need to read the code.
+permissions:
+  contents: read
+
 jobs:
   checks:
     runs-on: ubuntu-latest

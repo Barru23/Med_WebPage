@@ -30,7 +30,7 @@ needs explanation, the design is wrong.
 | Scale | Most activities under 100 people; peak 100–300 |
 | Languages | Catalan (default), Spanish, English |
 | Deadline | First small activity live within one month |
-| Legal entity | Personal account (see §9). Do not hardcode a name. |
+| Legal entity | Configured outside the repo (see §9). Do not hardcode a name. |
 
 ---
 
@@ -43,8 +43,10 @@ needs explanation, the design is wrong.
 - **File storage:** Cloudflare R2 (posters, merch photos)
 - **Admin auth:** one **shared password**, held as the Cloudflare secret
   `ADMIN_PASSWORD` and never in the database or in Git. The session cookie is
-  signed with the password itself, so rotating it logs everyone out at once —
-  which is what you want the day someone leaves the team. Checked in
+  an HMAC signed with a separate secret, `ADMIN_SESSION_SECRET` (32+ random
+  characters), never with the password, so a leaked signing key does not
+  reveal the password. Rotating `ADMIN_SESSION_SECRET` logs everyone out at
+  once; rotate both the day someone leaves the team. Checked in
   `src/proxy.ts` before any admin route runs, and again in the admin layout,
   the export route handler and every admin server action.
   A Cloudflare Access application over `/admin*` is an optional and recommended
@@ -313,17 +315,17 @@ next, without apologising. Empty states invite an action.
 
 ---
 
-## 9. Open legal items — do not launch without these
+## 9. Legal and privacy constraints on the code
 
-- **Who legally receives the money: resolved as a personal account.** One
-  student is the Stripe account holder and merchant of record for the full
-  turnover (not an *associació d'estudiants* — that path was considered and
-  dropped). The codebase must still never hardcode *which* student — the
-  Stripe account is configured outside the repo (dashboard + secrets), and
-  nothing here should assume a specific name.
-- Privacy policy naming the data controller — depends on the above, still open
-  (needs the actual student's name/details, which live outside the repo).
-- Terms of sale, including refund policy.
+- **The merchant identity lives outside the repository.** The Stripe account,
+  its holder and the legal identity shown on the site are configured in the
+  Stripe dashboard and in Cloudflare variables (`LEGAL_CONTROLLER_NAME`,
+  `LEGAL_CONTACT_EMAIL`). Never hardcode a person's name, ID or contact details
+  in code, seed data, tests or documentation.
+- Checkout stays closed outside localhost until those legal variables are set
+  (`src/lib/legalConfig.ts`), and the legal pages read them at runtime.
+- Terms of sale, including refund policy, are versioned (`TERMS_VERSION`) and
+  their acceptance is recorded on every order.
 - Cookie handling. Keep cookies to the strict minimum (locale + session) so the
   banner stays simple or unnecessary. No analytics in v1.
 - Trips collect DNI and sometimes health-adjacent data (allergies). Store the
@@ -365,7 +367,7 @@ admin marks paid, €0 variants skip payment entirely. Ticket at `/t/{code}`.
 Excel download. This version is shippable for a first activity.
 
 **6 — Stripe.** Test mode first. Checkout with cards and Bizum, webhook,
-idempotent handler, stock held 15 minutes. Live keys only after §9 is resolved.
+idempotent handler, stock held 15 minutes. Live keys only after the legal variables of §9 are set.
 
 **7 — Extras.** The Apps Script relay of §3 — sheet row and buyer email in one
 call from the webhook. Legal pages and the terms checkbox at checkout. Then

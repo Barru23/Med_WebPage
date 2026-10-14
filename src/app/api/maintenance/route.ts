@@ -22,6 +22,13 @@ export async function POST(request: NextRequest) {
   const db = await getDb();
   const results = await db.batch([
     db.prepare(`DELETE FROM login_attempt WHERE attempted_at < datetime('now', '-15 minutes')`),
+    // The hashed client key only feeds the checkout abuse limits, which look
+    // back one day at most (src/lib/checkoutLimits.ts). Past that it is
+    // personal data with no purpose left.
+    db.prepare(
+      `UPDATE "order" SET client_key = NULL
+        WHERE client_key IS NOT NULL AND created_at < datetime('now', '-1 day')`,
+    ),
     db.prepare(
       `UPDATE stripe_event
           SET processing_status = 'failed', last_error = 'Processing lease expired'

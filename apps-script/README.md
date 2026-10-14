@@ -41,17 +41,23 @@ Esborra el que hi hagi i enganxa-hi tot el contingut de `Codi.gs`.
 
 ### 4. Posa-hi un secret
 
-A dalt de tot del codi hi ha:
+El secret **no** s'escriu dins del codi: `Codi.gs` és públic al repositori, i
+qualsevol valor que hi enganxis acabaria copiat de tornada algun dia.
 
-```js
-var SECRET = 'ENGANXA_AQUI_EL_SECRET';
-```
+1. Desa el codi amb el disquet (o `Ctrl+S`).
+2. A la barra de l'esquerra, obre **Configuració del projecte** (l'engranatge).
+3. A baix de tot, a **Propietats de l'script**, prem **Afegeix una propietat**.
+4. Propietat: `SHEETS_RELAY_SECRET`. Valor: una cadena llarga i aleatòria
+   (32 caràcters o més).
+5. **Desa les propietats de l'script**.
 
-Substitueix-ho per una cadena llarga i aleatòria. Serveix perquè ningú que
-endevini l'adreça del script hi pugui escriure files falses. Guarda-te-la:
-l'hauràs de posar també a Cloudflare al pas 7.
+Serveix perquè ningú que endevini l'adreça del script hi pugui escriure files
+falses ni enviar correus. Guarda-te-la: l'hauràs de posar també a Cloudflare al
+pas 7. Sense aquesta propietat, el script ho rebutja tot amb `no autoritzat`.
 
-Desa amb el disquet (o `Ctrl+S`).
+> **Si ja tenies el relé muntat amb `var SECRET = '...'` al codi:** crea la
+> propietat amb aquell mateix valor *abans* d'enganxar el codi nou, o el relé
+> deixarà de funcionar fins que la creïs.
 
 ### 5. Prova que funciona abans de connectar res
 
@@ -86,22 +92,33 @@ Botó blau **Desplega → Nou desplegament**.
 
 > "Qualsevol" fa por però és correcte: el web de Cloudflare no té cap compte de
 > Google amb què identificar-se. Qui protegeix el punt d'entrada és el secret
-> del pas 4. El script no retorna mai cap dada del full — només `{"ok":true}` —
-> així que ni endevinant l'adreça se'n pot treure res.
+> del pas 4, que es comprova abans de fer res més. El script no retorna mai cap
+> dada del full — només `{"ok":true}` — així que ni endevinant l'adreça se'n pot
+> treure res. Tot i així, tracta l'URL com un secret: si mai es filtra, fes un
+> **desplegament nou** (l'URL canvia) i arxiva l'antic.
 
 Copia l'**URL de l'aplicació web**. Acaba amb `/exec`.
 
 ### 7. Digue-li al web on és
 
-Dues comandes al terminal, dins de la carpeta del projecte. Cadascuna et
+Tres comandes al terminal, dins de la carpeta del projecte. Cadascuna et
 demanarà el valor pel teclat:
 
 ```powershell
 npx wrangler secret put SHEETS_RELAY_URL      # l'URL acabada en /exec
 npx wrangler secret put SHEETS_RELAY_SECRET   # el secret del pas 4
+npx wrangler secret put LIVE_SHEET_URL        # l'adreça del full (o només el seu id)
 ```
 
-I per a desenvolupament local, les mateixes dues línies a `.dev.vars`.
+`LIVE_SHEET_URL` és el que fa funcionar el botó **Full de Google en directe** de
+la pantalla de Vendes. Accepta l'adreça sencera copiada del navegador o només
+l'id. Cap d'aquests tres valors va mai a `wrangler.jsonc` ni al codi.
+
+> Si `SHEETS_RELAY_URL` ja existeix com a **variable** (no secret) al panell de
+> Cloudflare, esborra-la primer a *Workers → xivarri → Settings → Variables*:
+> un secret i una variable no poden tenir el mateix nom.
+
+I per a desenvolupament local, les mateixes tres línies a `.dev.vars`.
 
 ### 8. Comprova-ho d'extrem a extrem
 
@@ -166,14 +183,21 @@ tres. Si una nit es passa el límit, les files segueixen entrant al full i els
 compradors segueixen veient el codi a la pantalla; només es perd el correu, i
 es pot reenviar l'endemà amb el botó **Reenviar**.
 
+Per protegir aquesta quota, les inscripcions **gratuïtes** (0 €) envien com a
+màxim 40 correus al dia en total i 3 per connexió. Passat el límit, la
+inscripció es fa igual i el codi surt a la pantalla; el correu queda pendent a
+**Operacions** perquè l'enviïs a mà si cal.
+
 **Si canvies el codi**, has de tornar a desplegar: **Desplega → Gestiona
 desplegaments → llapis → Versió: Nova → Desplega**. Si en comptes d'això crees
 un desplegament nou, l'URL canvia i has d'actualitzar el secret.
 
 **Qui hi ha de tenir accés.** Comparteix el full només amb les organitzadores.
 Conté noms, correus, telèfons i, als viatges, les respostes de cada
-participant — DNI i al·lèrgies incloses. Això és exactament el que
-`requisits-produccio.md` §6 diu que s'ha de restringir.
+participant — DNI i al·lèrgies incloses. A **Comparteix**, l'accés general ha
+de ser **Restringit**, mai «Qualsevol amb l'enllaç». La retenció i qui ha de
+poder veure aquestes dades són al
+[runbook de producció](../docs/production-runbook.md#manteniment-programat).
 
 **Duplicats.** El script comprova `order_id` abans d'escriure. Un reintent de
 Stripe, o prémer **Reenviar** dues vegades, no pot duplicar cap fila.

@@ -2,7 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSales } from "@/lib/admin/queries";
 import { formatDate, formatPrice } from "@/lib/format";
-import { LIVE_SHEET_URL, sheetTabName } from "@/lib/sheet";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { liveSheetUrl, sheetTabName } from "@/lib/sheet";
 import MarkPaidButton from "./MarkPaidButton";
 import ResyncButton from "./ResyncButton";
 import { requireAdminPage } from "@/lib/auth";
@@ -38,6 +39,8 @@ export default async function SalesPage({
   // The tab the relay writes this activity's orders to. Naming it saves the
   // admin from scrolling a sheet with one tab per activity and edition.
   const tabName = sheetTabName(sales.activity.title_ca, sales.currentEdition);
+  const { env } = await getCloudflareContext({ async: true });
+  const sheetHref = liveSheetUrl(env.LIVE_SHEET_URL);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -84,15 +87,24 @@ export default async function SalesPage({
         <a href={`${exportHref}${exportHref.includes("?") ? "&" : "?"}include=all`} className="admin-btn">
           Excel complet
         </a>
-        <a
-          href={LIVE_SHEET_URL}
-          target="_blank"
-          rel="noreferrer"
-          className="admin-btn"
-          title={`Obre el full compartit. La pestanya d’aquesta activitat es diu «${tabName}».`}
-        >
-          Full de Google en directe
-        </a>
+        {sheetHref ? (
+          <a
+            href={sheetHref}
+            target="_blank"
+            rel="noreferrer"
+            className="admin-btn"
+            title={`Obre el full compartit. La pestanya d’aquesta activitat es diu «${tabName}».`}
+          >
+            Full de Google en directe
+          </a>
+        ) : (
+          <span
+            className="admin-btn cursor-not-allowed opacity-50"
+            title="Falta la variable LIVE_SHEET_URL a Cloudflare. Avisa qui gestiona el web."
+          >
+            Full de Google no configurat
+          </span>
+        )}
       </div>
 
       <p className="mt-2 font-mono text-xs text-ink/70">

@@ -5,6 +5,7 @@ import { submitOrder, type CheckoutState } from "@/lib/actions/checkout";
 import Link from "next/link";
 import { formatPrice } from "@/lib/format";
 import { serviceFeeCents } from "@/lib/fees";
+import { effectiveMaxPerOrder } from "@/lib/orders";
 import SubmitButton from "@/components/admin/SubmitButton";
 import { pick, type Locale } from "@/lib/i18n";
 import type { Variant, Field } from "@/lib/queries";
@@ -102,8 +103,9 @@ export default function CheckoutForm({
   const fee = serviceFeeCents(total);
   const charged = total + fee;
 
-  // Safety ceiling mirrored by the server; an activity may choose a lower cap.
-  const effectiveMax = Math.min(maxPerOrder ?? 100, 100);
+  // The same cap the server enforces: the activity's own, or the default when
+  // the admin left it blank.
+  const effectiveMax = effectiveMaxPerOrder(maxPerOrder);
   const unitsSoFar = hasFields
     ? lines.length
     : Object.values(quantities).reduce((sum, qty) => sum + qty, 0);
@@ -148,11 +150,9 @@ export default function CheckoutForm({
     <form action={formAction} className="flex flex-col gap-6">
       <input type="hidden" name="lines_json" value={JSON.stringify(linesPayload)} readOnly />
 
-      {maxPerOrder !== null && (
-        <p className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
-          {strings.maxPerOrder.replace("{n}", String(maxPerOrder))}
-        </p>
-      )}
+      <p className="font-mono text-[0.7rem] uppercase tracking-widest text-ink/70">
+        {strings.maxPerOrder.replace("{n}", String(effectiveMax))}
+      </p>
 
       {!hasFields && (
         <ul className="divide-y divide-sand border-y border-sand">

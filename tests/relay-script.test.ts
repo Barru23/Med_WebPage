@@ -2,7 +2,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { loadRelayScript, type RelayHarness } from "./helpers/sheets.ts";
 import type { RelayPayload } from "../src/lib/relay.ts";
-import { sheetTabName } from "../src/lib/sheet.ts";
+import { liveSheetUrl, sheetTabName } from "../src/lib/sheet.ts";
 
 /**
  * The Apps Script relay, exercised with the exact payload `src/lib/relay.ts`
@@ -136,6 +136,29 @@ test("the wrong secret gets nothing, and leaves no tab behind", () => {
   assert.equal(relay.sheet("Mediportaventura — Tardor 2026"), undefined);
 });
 
+test("a request without the secret never takes the lock", () => {
+  const relay = loadRelayScript();
+  // The /exec address is public. If junk could hold the lock, a flood of it
+  // would make real Stripe deliveries answer "ocupat".
+  relay.post(order(relay, { secret: "guessed" }));
+  relay.post({ order_id: "ord_x" });
+  assert.equal(relay.locksTaken(), 0);
+
+  relay.post(order(relay));
+  assert.equal(relay.locksTaken(), 1);
+});
+
+test("a script with no secret property refuses everything", () => {
+  const relay = loadRelayScript();
+  relay.forgetSecret();
+  // Even a payload carrying the "right" value: an empty property must never
+  // turn into "anything goes".
+  const result = relay.post(order(relay));
+  assert.equal(result.ok, false);
+  assert.equal(result.error, "no autoritzat");
+  assert.equal(relay.mails.length, 0);
+});
+
 test("an order with no items answers OK and sends no email", () => {
   const relay = loadRelayScript();
   const result = relay.post(order(relay, { items: [] }));
@@ -205,6 +228,45 @@ test("a formula typed into a buyer field lands as text", () => {
   assert.equal(row.preu_eur, 5);
 });
 
+test("leading whitespace and control characters do not smuggle a formula past", () => {
+  const relay = loadRelayScript();
+  relay.post(
+    order(relay, {
+      buyer_name: "\t=HYPERLINK(\"https://attacker.example\")",
+      buyer_phone: "  +34600111222",
+      items: [
+        {
+          ticket_code: "ZZ22QQ",
+          item: "General",
+          quantity: 1,
+          unit_price_eur: 5,
+          answers: { DNI: "\r\n@SUM(A1)", "Al·lèrgies": " ＝1+1" },
+        },
+      ],
+    }),
+  );
+
+  const row = relay.sheet("Mediportaventura — Tardor 2026")!.row(2);
+  assert.equal(row.comprador, "'=HYPERLINK(\"https://attacker.example\")");
+  assert.equal(row.telefon, "'+34600111222");
+  assert.equal(row.DNI, "'@SUM(A1)");
+  assert.equal(row["Al·lèrgies"], "'＝1+1");
+});
+
+test("buyer-written columns are set to plain text before they are written", () => {
+  const relay = loadRelayScript();
+  relay.post(order(relay));
+
+  const sheet = relay.sheet("Mediportaventura — Tardor 2026")!;
+  for (const header of ["comprador", "correu", "telefon", "modalitat", "DNI", "Al·lèrgies"]) {
+    assert.equal(sheet.formatAt(2, header), "@", `${header} should be plain text`);
+  }
+  // Prices, units and dates stay automatic so the sheet can still sum and sort.
+  for (const header of ["preu_eur", "unitats", "pagat_el"]) {
+    assert.equal(sheet.formatAt(2, header), undefined, `${header} should stay automatic`);
+  }
+});
+
 test("an activity with more questions than a new sheet has columns still writes", () => {
   const relay = loadRelayScript();
   const labels = Array.from({ length: 30 }, (_, i) => `Pregunta ${i + 1}`);
@@ -245,4 +307,20 @@ test("the Sales screen names the same tab the script creates", () => {
       `disagreed on ${JSON.stringify([activity, edition])}`,
     );
   }
+});
+
+test("the Sales screen accepts the sheet as a bare id or a pasted URL", () => {
+  const id = "1AbCdEfGhIjKlMnOpQrStUvWxYz_0123-456789";
+  const canonical = `https://docs.google.com/spreadsheets/d/${id}/edit`;
+
+  assert.equal(liveSheetUrl(id), canonical);
+  assert.equal(liveSheetUrl(`  ${id}  `), canonical);
+  assert.equal(liveSheetUrl(`https://docs.google.com/spreadsheets/d/${id}/edit#gid=0`), canonical);
+  assert.equal(liveSheetUrl(`https://docs.google.com/spreadsheets/d/${id}`), canonical);
+
+  // Missing or nonsense: no link at all, rather than a link to the wrong place.
+  assert.equal(liveSheetUrl(undefined), null);
+  assert.equal(liveSheetUrl(""), null);
+  assert.equal(liveSheetUrl("canvia-aixo"), null);
+  assert.equal(liveSheetUrl("https://example.com/spreadsheets/d/short"), null);
 });

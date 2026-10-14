@@ -1,6 +1,6 @@
 # Runbook de producció
 
-Aquest document descriu la posada en producció, el manteniment i la resposta a incidències de XIVARRI. Les migracions `0009`–`0013` són additives, però el codi nou pressuposa que totes estan aplicades.
+Aquest document descriu la posada en producció, el manteniment i la resposta a incidències de XIVARRI. Les migracions `0009`–`0014` són additives, però el codi nou pressuposa que totes estan aplicades.
 
 ## Responsables
 
@@ -25,6 +25,7 @@ STRIPE_SECRET_KEY
 STRIPE_WEBHOOK_SECRET
 SHEETS_RELAY_URL
 SHEETS_RELAY_SECRET
+LIVE_SHEET_URL
 MAINTENANCE_SECRET
 ```
 
@@ -113,7 +114,7 @@ Amb les vendes tancades:
 npm run db:migrate
 ```
 
-Comprova que arriben fins a `0013_privacy_retention.sql`. No executis `seed.sql` a producció.
+Comprova que arriben fins a `0014_checkout_abuse_limits.sql`. No executis `seed.sql` a producció.
 Les edicions migrades des de l'esquema antic no tenen data final perquè no es pot inferir amb seguretat: revisa-les totes a l'administració i assigna `ends_at`. Una edició sense data final no apareix al web públic ni accepta compres.
 La migració classifica de manera conservadora noms comuns com DNI, passaport, al·lèrgies, salut i contacte d'emergència. Revisa manualment la classificació de totes les preguntes abans de publicar-les.
 
@@ -235,7 +236,7 @@ Restaurar D1 descarta els canvis posteriors al punt escollit. Abans de fer-ho, e
 - [ ] Webhook Stripe amb tots els esdeveniments requerits.
 - [ ] Cron diari de manteniment amb alerta de fallada.
 - [ ] Punt de recuperació D1 registrat.
-- [ ] Migracions `0001`–`0013` aplicades.
+- [ ] Migracions `0001`–`0014` aplicades.
 - [ ] CI, build, proves unitàries i E2E en verd.
 - [ ] Compra, QR, porta, reemborsament i disputa provats en mode test.
 - [ ] Responsables i canal d'incidències acordats.

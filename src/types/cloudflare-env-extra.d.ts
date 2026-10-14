@@ -17,4 +17,7 @@ interface CloudflareEnv {
   // mirror to the sheet.
   SHEETS_RELAY_URL?: string;
   SHEETS_RELAY_SECRET?: string;
+  // The shared sheet the relay writes to: its id or its full URL. Without it
+  // the Sales screen says the sheet is not configured instead of linking.
+  LIVE_SHEET_URL?: string;
 }

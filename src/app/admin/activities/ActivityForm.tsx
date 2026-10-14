@@ -11,6 +11,7 @@ import {
   type ActivityImageDraft,
   type SizeGuideRowDraft,
 } from "@/lib/admin/activityForm";
+import { DEFAULT_MAX_PER_ORDER } from "@/lib/orders";
 import VariantEditor from "./VariantEditor";
 import FieldEditor from "./FieldEditor";
 import MediaEditor from "./MediaEditor";
@@ -192,7 +193,7 @@ export default function ActivityForm({
             type="number"
             min={1}
             max={100}
-            placeholder="sense límit"
+            placeholder={`en blanc = ${DEFAULT_MAX_PER_ORDER}`}
             defaultValue={activity?.max_per_order ?? ""}
           />
         </label>

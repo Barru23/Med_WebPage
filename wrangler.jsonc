@@ -20,7 +20,7 @@
 	// workers.dev reachable would hand out an unprotected way in.
 	"workers_dev": true,
 	// Production configuration is managed in the Cloudflare dashboard. Keep
-	// those variables (relay URL, legal identity and checkout kill switch)
+	// those variables (legal identity and checkout kill switch)
 	// when deploying new application versions with Wrangler.
 	"keep_vars": true,
 	// Static assets produced by the OpenNext build.
@@ -59,12 +59,14 @@
 		"LEGAL_CONTACT_EMAIL": "promocio14medicinaudg@gmail.com",
 		"LEGAL_CONTROLLER_NAME": "Promoció 14 Medicina UDG",
 		"PUBLIC_BASE_URL": "https://xivarri.xivarri.workers.dev",
-		"SHEETS_RELAY_URL": "https://script.google.com/macros/s/REDACTED_APPS_SCRIPT_ID/exec",
 		"TERMS_VERSION": "2026-09-10"
 	}
 	// ---- Secrets (never committed here) --------------------------------------
 	// Local dev: copy .dev.vars.example -> .dev.vars and fill in TEST keys.
 	// Deploy every value listed in .dev.vars.example with `wrangler secret put`.
+	// That includes SHEETS_RELAY_URL and LIVE_SHEET_URL: the Apps Script /exec
+	// address and the sheet id point at the buyer list, so they live in
+	// Cloudflare and never in this file.
 	// Keep CHECKOUT_ENABLED=false and use Stripe TEST keys until the checklist in
 	// docs/production-runbook.md is complete.
 	// ---- Admin auth (CLAUDE.md §3 / §7) --------------------------------------

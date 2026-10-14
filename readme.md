@@ -20,6 +20,8 @@ Aplicació web per publicar activitats, vendre entrades o marxandatge, gestionar
 ### Compra, aforament i pagament
 
 - Compra sense compte d'usuari amb preus, límits, variants i respostes validats al servidor.
+- Màxim per compra de 10 unitats si l'activitat no en fixa un altre, i màxim de 5 compres sense pagar obertes per connexió i edició.
+- Topall diari de correus per a les inscripcions gratuïtes, per protegir la quota de Gmail.
 - Tallafoc global amb `CHECKOUT_ENABLED` i bloqueig automàtic fora de local si falta el nom o el correu públic de l'organització.
 - Una entrada i un codi QR independent per cada plaça d'un esdeveniment o viatge.
 - Reserva atòmica d'estoc per a compres gratuïtes i de pagament.
@@ -44,7 +46,7 @@ Aplicació web per publicar activitats, vendre entrades o marxandatge, gestionar
 
 ### Administració
 
-- Contrasenya compartida amb limitació atòmica d'intents per IP.
+- Contrasenya compartida amb limitació atòmica d'intents per IP (IPv6 agrupada per /64) i un llindar global.
 - Cookie de 12 hores signada amb `ADMIN_SESSION_SECRET`, independent de `ADMIN_PASSWORD`.
 - Protecció al proxy, layout, pàgines, consultes, exportacions i Server Actions.
 - Alta, edició, duplicació, publicació, arxiu i eliminació condicionada d'activitats.
@@ -136,7 +138,7 @@ Cal Node.js **20.9 o superior**. La integració contínua utilitza Node.js 22.
 
 ## Model de dades i migracions
 
-Les migracions són a `migrations/` i arriben fins a `0013_privacy_retention.sql`:
+Les migracions són a `migrations/` i arriben fins a `0014_checkout_abuse_limits.sql`:
 
 1. `0001`: esquema inicial.
 2. `0002`: reserves i enduriment de comerç.
@@ -151,6 +153,7 @@ Les migracions són a `migrations/` i arriben fins a `0013_privacy_retention.sql
 11. `0011`: snapshots immutables de respostes.
 12. `0012`: lliurament independent a full i correu.
 13. `0013`: classificació i retenció de dades.
+14. `0014`: límits contra l'abús del checkout.
 
 ## Configuració local
 
@@ -169,6 +172,7 @@ Les migracions són a `migrations/` i arriben fins a `0013_privacy_retention.sql
    STRIPE_WEBHOOK_SECRET=
    SHEETS_RELAY_URL=
    SHEETS_RELAY_SECRET=
+   LIVE_SHEET_URL=
    PUBLIC_BASE_URL=http://localhost:3000
    CHECKOUT_ENABLED=true
    TERMS_VERSION=2026-09-10
@@ -260,4 +264,4 @@ La seqüència exacta, el rollback i la checklist són a [docs/production-runboo
 
 ## Estat del repositori
 
-El projecte no declara llicència. Les credencials locals, els artefactes de build, les dades personals i els fitxers de resultats s'han de mantenir fora de Git.
+Tots els drets reservats: vegeu [LICENSE](LICENSE). El codi es pot consultar, però no reutilitzar sense permís. Les credencials locals, els artefactes de build, les dades personals i els fitxers de resultats s'han de mantenir fora de Git.
