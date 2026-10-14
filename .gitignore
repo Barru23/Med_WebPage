@@ -46,3 +46,6 @@ Thumbs.db
 # neteja puntual de dades de prova, no forma part del projecte
 neteja-comandes-prova.sql
 output/pdf/
+
+# next dev writes its agent-rules block here when this file exists, which keeps CLAUDE.md clean
+AGENTS.md
